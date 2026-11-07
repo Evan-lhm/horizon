@@ -494,7 +494,7 @@ impl Game<'_> {
     /// another id (hide them again from `native_player_logged_in`). Only
     /// where no player's state is swapped in, as `native_run_command`; false
     /// there, when `viewer` isn't on and for their own entity. API
-    /// @API:hide_entity_from@.
+    /// 521.
     pub(super) fn native_hide_entity_from(
         &mut self,
         viewer: u128,
@@ -533,7 +533,7 @@ impl Game<'_> {
     /// later (they join, a vanish ends), so it is kept until a mod sets it
     /// again or the server stops, also if they leave and come back. Only
     /// where no player's state is swapped in, as `native_run_command`; false
-    /// there and when they aren't on. API @API:set_list_name@.
+    /// there and when they aren't on. API 550.
     pub(super) fn native_set_list_name(&mut self, uuid: u128, name: Option<&Text>) -> bool {
         let Some(host) = &mut self.lan else {
             return false;
@@ -555,7 +555,7 @@ impl Game<'_> {
     /// or the nickname. Kept until a mod sets it again or the server stops,
     /// also if they leave and come back. Only where no player's state is
     /// swapped in, as `native_run_command`; false there and when they aren't
-    /// on. API @API:set_display_name@.
+    /// on. API 549.
     pub(super) fn native_set_display_name(&mut self, uuid: u128, name: Option<&Text>) -> bool {
         let Some(host) = &mut self.lan else {
             return false;
@@ -582,7 +582,7 @@ impl Game<'_> {
     /// mod sets it again or the server stops, also if they leave and come
     /// back. Only where no player's state is swapped in, as
     /// `native_run_command`; false there, when they aren't on and for a tag
-    /// that isn't one. API @API:set_name_tag@.
+    /// that isn't one. API 551.
     pub(super) fn native_set_name_tag(&mut self, uuid: u128, tag: Option<&str>) -> bool {
         if tag.is_some_and(|t| {
             t.is_empty() || t.len() > 16 || !t.bytes().all(|b| b.is_ascii_graphic())
@@ -705,7 +705,7 @@ impl Game<'_> {
     /// player it hears, whose level is set by then: a login gate needs no
     /// `ops.json` of its own. Inside a player's hook, with the hub out of
     /// reach, only that player is found. None for a player who isn't on, and
-    /// on a client. API @API:player_permission@.
+    /// on a client. API 483.
     pub(super) fn native_player_permission(&self, player: u128) -> Option<u8> {
         if let Some((uuid, level)) = self.native_login_permission
             && uuid == player
@@ -762,7 +762,7 @@ impl Game<'_> {
     /// anything else to vanilla's. The lines it answers with come back in
     /// `output` and reach no one else, operators included. Only where
     /// `native_run_command` runs: inside a player's hook nothing runs. API
-    /// @API:run_command_captured@.
+    /// 500.
     pub(super) fn native_run_command_captured(&mut self, line: &str) -> NativeCommandResult {
         let mut out = NativeCommandResult::default();
         if self.lan_acting.is_some() || self.lan.is_none() {
@@ -801,14 +801,14 @@ impl Game<'_> {
     /// `Bukkit.dispatchCommand` from the console): a command a mod registered
     /// goes to the mods (`native_perform_console_command`), anything else to
     /// vanilla's. Whether it ran: a mod took it, or vanilla's ran without
-    /// failing. No output, as `native_run_command`. API @API:run_mod_command@.
+    /// failing. No output, as `native_run_command`. API 501.
     pub(super) fn native_run_mod_command(&mut self, line: &str) -> bool {
         self.native_run_command_captured(line).ran
     }
     /// The server's command `label` names (Bukkit's `CommandMap.getCommand`):
     /// one a mod registered (`native_register_commands`), else vanilla's, an
     /// alias resolved (`tp` gives `teleport`). None when there is none.
-    /// API @API:command_info@.
+    /// API 459.
     pub(super) fn native_command_info(&self, label: &str) -> Option<NativeCommandInfo> {
         let label = label.strip_prefix('/').unwrap_or(label);
         if let Some(host) = &self.lan
@@ -838,7 +838,7 @@ impl Game<'_> {
     /// `output`. `native_player_command` doesn't hear it. Where
     /// `native_run_command` runs, or inside that player's own hook (then the
     /// lines join the hook's feedback); elsewhere, or for a player not on the
-    /// server, nothing runs. API @API:run_command_as@.
+    /// server, nothing runs. API 499.
     pub(super) fn native_run_command_as(&mut self, uuid: u128, line: &str) -> NativeCommandResult {
         let mut out = NativeCommandResult::default();
         let line = line.strip_prefix('/').unwrap_or(line).to_owned();
@@ -1377,7 +1377,7 @@ impl Game<'_> {
     /// commands players may run are rebuilt, and every player on the server is
     /// sent their tree again, after `native_player_commands_sent`. Nothing
     /// happens where no world is open to players, and nothing for a server
-    /// whose mods never call it. API @API:refresh_commands@.
+    /// whose mods never call it. API 445.
     pub(super) fn native_refresh_commands(&mut self) {
         self.native_commands_refresh = true;
     }

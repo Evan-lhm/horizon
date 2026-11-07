@@ -224,7 +224,7 @@ impl BlockEntityDraw {
     /// with a new speed, pass the phase that keeps the part where it was
     /// (`old_angle - game_time * new_speed`), or it jumps. Until
     /// `still` or the next `spin`. A block entity's frame only: a mob's
-    /// (`native_mob_submit`) draws it at rest. API @API:spinning_geometry@.
+    /// (`native_mob_submit`) draws it at rest. API 421.
     pub fn spin(&mut self, axis: [f32; 3], pivot: [f32; 3], degrees_per_tick: f32, phase: f32) {
         let spin = Spin {
             axis: Vec3::from_array(axis).normalize_or(Vec3::Y),
@@ -239,7 +239,7 @@ impl BlockEntityDraw {
         self.spins.push((self.vertices.len(), Some(spin)));
     }
     /// What is drawn next stands still again, after `spin`.
-    /// API @API:spinning_geometry@.
+    /// API 421.
     pub fn still(&mut self) {
         self.spins.push((self.vertices.len(), None));
     }
@@ -578,7 +578,7 @@ impl Game<'_> {
     /// `glowing` text is full bright (a glow ink sac's), the rest lit by
     /// `draw.light`; a nonzero 0xRRGGBB `outline` rings each glyph, as glowing
     /// sign text's. Returns the width drawn, in font pixels: centre a line
-    /// by starting it at minus half its width. API @API:draw_text@.
+    /// by starting it at minus half its width. API 419.
     pub(super) fn native_draw_text(
         &self,
         draw: &mut BlockEntityDraw,
@@ -716,7 +716,7 @@ impl Game<'_> {
     /// its front towards -z, its feet 24 texels down): in `native_mob_submit`,
     /// `draw.scale([1.0, -1.0, -1.0])` then `draw.translate([0.0, -1.501,
     /// 0.0])` first, as `LivingEntityRenderer` does. False for an unknown
-    /// sprite. API @API:model_layers@.
+    /// sprite. API 434.
     pub(super) fn native_draw_model_part(
         &self,
         draw: &mut BlockEntityDraw,
@@ -739,7 +739,7 @@ impl Game<'_> {
     /// once, as a renderer does, and set its parts' poses each frame. None
     /// for a layer neither has. A vanilla layer no mob has (a player's, a
     /// chest's) is read from the resources each call, so slow. API
-    /// @API:model_layers@.
+    /// 434.
     pub(super) fn native_bake_layer(&self, layer: &str) -> Option<ModelPart> {
         if let Some(definition) = model_layers::registered(layer) {
             return Some(definition.bake_root());

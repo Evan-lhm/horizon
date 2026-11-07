@@ -1,6 +1,6 @@
 # Native mods
 
-`native_chat_suggestion_applied(original, start, end, suggestion, input)` reports a suggestion accepted in the open chat by Tab or a mouse click, after the text and caret have changed. `original` is the suggestion list's input before any completion; `start` and `end` are the replaced range in that string, in Java UTF-16 units (end exclusive). They keep referring to `original` when Tab cycles through the list. `suggestion` is the selected replacement text, and `input` is the actual resulting field value, including any length-limit truncation. This is a read-only notification: previews, list navigation, server replies, ordinary typing and command-block editors do not fire it. Trait mods implement `Hooks::chat_suggestion_applied`; mixin bundles use `chat_suggestion_applied`, hook version 1. Bundles need "hooks": @API:chat_suggestion_applied@ (assigned at merge).
+`native_chat_suggestion_applied(original, start, end, suggestion, input)` reports a suggestion accepted in the open chat by Tab or a mouse click, after the text and caret have changed. `original` is the suggestion list's input before any completion; `start` and `end` are the replaced range in that string, in Java UTF-16 units (end exclusive). They keep referring to `original` when Tab cycles through the list. `suggestion` is the selected replacement text, and `input` is the actual resulting field value, including any length-limit truncation. This is a read-only notification: previews, list navigation, server replies, ordinary typing and command-block editors do not fire it. Trait mods implement `Hooks::chat_suggestion_applied`; mixin bundles use `chat_suggestion_applied`, hook version 1. Bundles need "hooks": 564 (assigned at merge).
 
 API 362 adds `native_compute_fov_modifier(player, base, modifier)` on the client each tick for the local player's FOV scale, after vanilla effects and before zoom and camera easing. `player` contains the calculation inputs and `base` is the original scale. Non-finite modifiers or values outside 0.01..=10 fall back to `base`. It does not affect a spectator camera on a mob. Bundles need "hooks": 362.
 
@@ -483,7 +483,7 @@ makes no progress, so the block isn't broken, not even one that breaks at once. 
 block (hardness -1) or in creative mode. It fires on the `Game` that works out the dig: in single player, on a LAN or
 dedicated host for each guest (the helpers read that player), and in a remote client's own prediction. A mod that
 changes the speed alike on both sides keeps the crack in step with the server. It is asked every tick of a dig, on
-each side, so it takes `&self` and should only compute. API @API:break_speed@.
+each side, so it takes `&self` and should only compute. API 437.
 
 ### Host-aware weapon damage (API next)
 
@@ -508,7 +508,7 @@ comes once the health and the combat tracker are done, with what came off the he
 took it all, or a mod made it 0), and only hears. Neither fires when no hit reaches `actuallyHurt` (refused,
 canceled by `native_living_incoming_damage`, or within the cooldown and no stronger than the last hit), nor when a
 wolf's armour takes the hit. Like `native_living_incoming_damage`, they have no `self` and run on the server thread.
-API @API:living_damage@.
+API 435.
 
 ### The build's warnings
 
@@ -1791,6 +1791,327 @@ API 412 adds `native_force_chunk(owner, chunk, hold)` holds a chunk of the level
 
 API 413 adds `native_force_chunk_in(owner, dimension, chunk, hold)`, `native_force_chunk` for a named level, which opens and ticks a level not open yet, so a mod can pre-generate the Nether and the End with nobody there. Bundles need "hooks": 413.
 
+API 414 adds `Host` gains `draw_model` (standalone models in `block_entity_submit`), `mod_block_entity(pos)` (a copy; on a client what the server sent) and `change_mod_block_entity(pos, change)`, `item_entities`, `level_random(dimension)`, `play_sound` and `send_particles` for the level in place, `block_name_in_tag` and `server_item_in_tag`, `component`, `set_component` and `remove_component`, `trigger_criterion` with a `&dyn Fn` test, `equipment(slot)` (on a client the player's own) and `sneaking()` (`isSecondaryUseActive` in a use hook). Bundles need "hooks": 414.
+
+API 415 adds `native_use_as_player(stack, eye, yaw, pitch, target, sneaking)` uses `stack` as NeoForge's `FakePlayer` would: `useItemOn` on a block, `useItem` in the air, or `interactOn` with an entity, in survival with nothing else in hand; it returns whether the use did something and what the fake player holds and carries afterwards. Bundles need "hooks": 415.
+
+API 416 adds `native_machine_destroy_block(pos, tool, collect)` is `Level.destroyBlock` with the loot rolled for `tool` and no player, the drops popped or, with `collect`, returned; `native_set_break_progress(breaker, pos, progress)` is `ServerLevel.destroyBlockProgress`. Bundles need "hooks": 416.
+
+API 417 adds `native_container_accepts(pos, entity, slot, stack, face, cancel)` is asked before a hopper, a dropper or `native_insert_item` puts an item into a slot of a mod's container that its `ModContainer` lets be filled; set `cancel` to refuse it, as `IItemHandler.isItemValid` returning false. Bundles need "hooks": 417.
+
+API 418 adds `native_block_face_sprite(state, side)` names the texture a block state's model shows on a side and its tint index, as `native_draw_cube` takes it: a copycat block draws its material's textures on its own shape. Bundles need "hooks": 418.
+
+API 419 adds `native_draw_text(draw, text, at, color, glowing, outline)` draws a `Text` under a block entity's pose as a sign draws its lines (`Font.drawInBatch`): one unit a font pixel, each span in its colour, glowing text full bright, an optional outline; it returns the width. Bundles need "hooks": 419.
+
+API 420 adds `native_draw_scene(batch, rect, blocks, view)` draws a few block states, at positions of their own, into a box of a screen, seen as `NativeSceneView` says (centre, yaw, pitch, scale), with a depth of their own: each block's model, and a mod block entity's drawing through `native_block_entity_submit` with its turning parts. Bundles need "hooks": 420.
+
+API 421 adds `BlockEntityDraw::spin(axis, pivot, degrees_per_tick, phase)` makes what is drawn next turn by itself and `still` ends it; kept with `keep`, a turning shaft is drawn every frame with no call of `native_block_entity_submit` until its block entity changes. Bundles need "hooks": 421.
+
+API 422 adds `native_fluid_flow(dimension, pos)` is `FluidState.getFlow(level, pos)`: the normalised current an item in the fluid is pushed by, zero for still or no fluid, none where the chunk isn't loaded or the dimension isn't available. Bundles need "hooks": 422.
+
+API 423 adds Tanks take a mod's own fluids (`create:chocolate`, `create:potion/healing`) as they take water and lava: `native_fluid_insert`, `native_fluid_extract` and `native_move_fluids` move them, `native_fluid_tanks` reads them, and its mod draws them. A cauldron takes only water and lava, and the world has only vanilla's fluids. Bundles need "hooks": 423.
+
+API 424 adds the glowing outline a client draws on an entity (`native_entity_outline(entity_id, kind, outline)`): vanilla's
+`isCurrentlyGlowing` and team colour come in as `Some(0xRRGGBB)` or None, and a mod sets `Some` to make any mob,
+player, dropped item or projectile glow in its own colour, or None to remove the outline. Drawing only: the entity's
+`Glowing` flag is unchanged. Bundles need "hooks": 424.
+
+API 425 adds world primitives through `native_world_primitives`: once a frame, a client mod adds lines, box outlines, filled
+boxes, beacon-style beams and camera-facing text in world coordinates, each depth tested or seen through walls,
+and Horizon draws them after the entities and before the hand ([World primitives](#world-primitives)). Bundles
+need `"hooks": 425`.
+
+API 426 adds on a client, `host.entity(id)` and the `entity_*` and `living_*` reads work against the entities the server shows the window (what a client knows: position, rotation, type, UUID, custom name, equipment; no saved data or tags; writes refused), and `host.menu_stacks()` gives the open server-opened menu's stacks, with their components, by slot. Bundles need "hooks": 426.
+
+API 427 adds `Host::send_map(uuid, map_id, colors)` sends a 128 x 128 map picture (16384 colour bytes) to a player for a filled map with that `map_id`, the existing `native_send_map` (API 132) now reachable from a trait mod. False for a player not here or `colors` not 16384 long. Bundles need "hooks": 427.
+
+API 428 adds `native_health_hud_state()`, Horizon's health HUD state, for a mod answering `native_health_hud`: its `left_height` and `right_height` place the item name and the action bar, and its `layout` draws Horizon's rows; and `native_local_attribute(name)`, the value of an attribute of this client's player (`minecraft:armor_toughness`). Bundles need "hooks": 428.
+
+API 429 adds `native_world_submit(draw)` runs once per extracted client world frame. `NativeWorldDraw` supplies the camera, partial tick, game time, light and a pose stack starting camera-relative; `translate_world([x,y,z])` subtracts the f64 camera before converting to f32. `native_world_quad(draw,sprite,corners,uv,rgba)` draws an unshaded atlas quad (UVs in 16 texels per sprite side; RGBA is four bytes). `native_world_text(draw,text,color,outline)` draws the actual styled font at (0,0), with ARGB colors and an optional eight-offset outline, and returns its advance. Both use lightmap light, normal fog, back-face culling, alpha blending and ordinary depth testing/writes. The outlined text's front uses the existing polygon-offset text pipeline. Geometry draws after particles, independently of block entities or source blocks, before the hand/HUD. No GPU objects are exposed. Bundles need "hooks": 429.
+
+API 430 adds a new mob's goals (`native_register_goals(mob)`, vanilla's `Mob.registerGoals`): `mob.ai.goals` and
+`mob.ai.targets` hold its species' goals, a mod type's template's; a mod clears them to replace them or adds its own
+`Goal`s, which steer the mob with its navigation (`nav_move_to`, `create_path_to`) and controls. Bundles need
+"hooks": 430.
+
+API 431 adds `native_structure_template(id, at, rotation, mirror)` reads structure template `id` (`StructureTemplateManager.get`: the world's saved structures, then the game's and the mods' own) and answers what `/place template` would place at `at`: its size and its blocks, each with its position, its turned state and its block entity data, in vanilla's placement order. Nothing is placed: a builder places the blocks a tick at a time with `native_set_block`. Bundles need "hooks": 431.
+
+API 432 adds A new toast is about to be queued: `native_toast_add(kind, id, cancel)`, NeoForge's `ToastAddEvent`. `kind` is `advancement`, `recipe`, `tutorial`, `system` or `now_playing`; `id` is the advancement id, the first recipe id, the tutorial hint, the system toast's id, or empty. Updates to a toast already up are not adds. Set `cancel` and it isn't queued, shown or sounded. Bundles need "hooks": 432.
+
+API 433 adds `native_block_entity_accepts_fluid(block, tank, fluid, cancel)` is asked before `native_fluid_insert` fills a fillable tank of a mod block's `ModFluidTanks`, in both passes, and before `native_move_fluids` counts that tank's room; set `cancel` to refuse the fluid there, so a water tank takes no `create:chocolate` and a removed mod leaves no id it cannot use behind. Every tank accepts every fluid unless a mod says otherwise; a cauldron and a drain never ask it. Bundles need "hooks": 433.
+
+API 434 adds Entity model layers built in code, as vanilla's `LayerDefinition` builders build them (`MeshDefinition`, `CubeListBuilder`, `CubeDeformation`, `PartPose`): `native_layer_definitions(layers)` registers a mod's by id (`mymod:golem#main`, NeoForge's `EntityRenderersEvent.RegisterLayerDefinitions`), `native_bake_layer(layer)` bakes one of them or a vanilla layer (`minecraft:zombie#main`) into a `ModelPart` tree (`EntityModelSet.bakeLayer`), and `native_draw_model_part(draw, part, sprite, tint)` draws the tree, its parts posed as the mod set them, under a mob's or a block entity's frame (`ModelPart.render`). Bundles need "hooks": 434.
+
+API 435 adds the damage that reaches a living entity's health: `native_living_damage_pre` may change it once armour, enchantment protection, effects and absorption have taken their part, and `native_living_damage_post` hears what came off, as NeoForge's `LivingDamageEvent.Pre` and `.Post` do, for players, mobs and the ender dragon ([Damage the health takes](#damage-the-health-takes)). Bundles need "hooks": 435.
+
+API 436 adds `native_tooltip_render_pre(stack, batch, x, y, cancel)` allows cancelling vanilla item tooltip rendering or drawing custom surfaces, while `Host` gains `gui_draw_item(batch, stack, at)`, `gui_draw_item_with(batch, stack, at, text)`, `has_shift_down()`, `has_control_down()`, `has_alt_down()`, and `is_key_down(key)`. Bundles need "hooks": 436.
+
+API 437 adds how fast a player digs a block: `native_break_speed` may change the speed that `Player.getDestroySpeed` gives, as NeoForge's `PlayerEvent.BreakSpeed` does, on both sides ([How fast a player digs](#how-fast-a-player-digs)). Bundles need "hooks": 437.
+
+API 438 adds `native_entity_change_block_v2(player, entity, kind, pos, from, to, cancel)` is asked before a landing's block change takes effect: farmland trampled into dirt and a turtle egg broken by a player walking over it. `player` is the player whose landing it was, `entity` and `kind` the mob for a mob's landing, `from` and `to` the block names. Set `cancel` and the block stays as it was, and nothing the change would have caused happens - the crop above untouched farmland stays. Bukkit's `EntityChangeBlockEvent`. Bundles need "hooks": 438.
+
+API 439 adds the window's client tick for client mods: `native_client_tick_pre()` and `native_client_tick_post()` bracket each one, as NeoForge's `ClientTickEvent.Pre` and `.Post` do, 20 times a second on the title screen, while paused and in a world alike, never on a server ([The client's tick](#the-clients-tick)). Bundles need "hooks": 439.
+
+API 440 adds the window's player logging in to a server, single player's own included: `native_client_player_network_logging_in()`, NeoForge's `ClientPlayerNetworkEvent.LoggingIn`, once per login packet after the new client level, not on respawns or dimension changes. Its counterpart for logging out is `native_client_disconnecting` ([Logging in and out](#logging-in-and-out)). Bundles need "hooks": 440.
+
+API 441 adds the start of a player's server tick: `native_player_tick_pre` runs once a tick for every living player in the world, at the start of their `ServerPlayer.tick`, before their digging, item use and cooldowns, as NeoForge's `PlayerTickEvent.Pre`. `native_player_tick` (API 31, `PlayerTickEvent.Post`) ends the same tick. The helpers read that player. Players still tick while the game is frozen (`/tick freeze`), and a dead player isn't called. Bundles need "hooks": 441.
+
+API 442 adds `native_screen_transparent_background(screen, batch, canceled)` (`Screen.renderTransparentBackground`) runs before drawing the translucent dark background behind in-game screens (inventory, containers, creative, books, signs, editors); set `canceled` to suppress the vanilla dark gradient. `apply_screen_blur()` requests vanilla's menu background blur for this frame, with a per-frame guard so blur applies at most once. `menu_blur_radius()` answers the configured `menuBackgroundBlurriness` option. `draw_menu_background(batch, rect, in_world)` draws the tiled 32x32 menu background across `rect`. `tiled_sprite(batch, sprite, rect, size, argb)` tiles an atlas sprite. Bundles need "hooks": 442.
+
+API 443 adds An anvil's result: `native_anvil_update(player, name, left, right, item_name, vanilla_output, vanilla_xp_cost, vanilla_material_cost, output, xp_cost, material_cost, canceled)` is NeoForge's `AnvilUpdateEvent`, where `AnvilMenu.createResult` ends, on both sides. A mod may change the output, the level cost and the material cost (how many of the right input the take uses), which start as vanilla's, or cancel, which leaves no result. Bundles need "hooks": 443.
+
+API 444 adds `native_default_state(block)`, the default state of a block by name (`Block.defaultBlockState`), what `native_set_block` takes, so a machine can clear or place a block without reaching into the registry. Bundles that use it need "hooks": 444.
+
+API 445 adds `native_refresh_commands()` (`Host::refresh_commands()` for trait mods) asks every mod's `native_register_commands` again at the start of the next server tick, rebuilds the commands players may run, and sends every player on the server their tree again after `native_player_commands_sent`, as vanilla's `PlayerList.sendPlayerPermissionLevel` (`Commands.sendCommands`) does after `/reload`. Nothing happens where no world is open to players. Bundles need "hooks": 445.
+
+API 446 adds `native_block_clone_item` supplies a block's clone stack from its actual state before ordinary Ctrl+Pick block-entity component copying. First response owns the result; no response retains vanilla. An empty or unregistered response suppresses picking. Bundles need "hooks": 446.
+
+API 447 adds `native_item_interact_mob(entity, kind, stack, swing)` runs after ordinary entity interactions pass, for an alive native Mob selected by the exact packet ID or unobstructed crosshair. First `Some(true)` owns and swings once; `Some(false)` owns without a swing; `None` passes. The nonempty stack belongs to the acting hand. Armor stands, other real players and dragon-part tables are not covered. Bundles need "hooks": 447.
+
+API 448 adds a right-click on an entity with the point clicked: `native_entity_interact_specific` hears the entity, its type, the held stack and the point clicked, measured from the entity's position, before `native_interact_entity`, as NeoForge's `PlayerInteractEvent.EntityInteractSpecific`; a claim swings the hand and ends the click. Server-side. Bundles need "hooks": 448.
+
+API 449 adds `sound_play` intercepts actual client sound starts and live parameter updates. `SoundPlayback` identifies the instance, event, source, position, relative flag and whether it is starting. Edit base volume/pitch transiently or cancel before subtitles/backend writes; invalid edits cancel. No Host/world borrow or reverb/DSP is supplied. Runs on the game thread; use existing client hooks for world/acoustics state. Bundles need "hooks": 449.
+
+API 450 adds `native_custom_block_fluids` opts into native-owned tank storage used by the existing sided block-fluid queries, insert and extract helpers. Providers retain their own data and tank rules. Ordinary transfers skip these endpoints until a rollback contract exists. Bundles need "hooks": 450.
+
+API 451 adds `Host::add_particle(&ParticleOptions, position, velocity) -> bool` submits one particle to this client's loaded world. It preserves all option and velocity slots, including encoded color/size arguments, and uses the existing built-in and named-sprite providers with normal camera-distance, Particles-setting and population limits. True means submitted, not necessarily visible; missing providers/sprite sets draw nothing. It returns false on servers, without a client player/level, or for non-finite numeric input. Custom provider registration and new trigger hooks remain separate. Bundles need "hooks": 451.
+
+API 452 adds `native_simulate_player_move(uuid, input)` plays one tick of a server player's movement from a bot's keys (forward, strafe, jump, sneak, sprint, yaw, pitch, the last velocity) with the client's own movement code, as `LocalPlayer.aiStep` and `Player.travel` do, and returns the position, velocity and ground it reaches without moving the player; `native_collision_boxes(dimension, aabb)` lists the block collision boxes in a box, as `Level.getBlockCollisions(null, aabb)`. Bundles need "hooks": 452.
+
+API 453 adds client world snapshots: `native_client_chunks(from, to)` shares the client world's loaded chunks of an area with a mod's worker threads (`NativeClientChunks`: block states, biome ids, which columns are loaded, each column's top non-empty section, the world's height), `native_client_chunks_changed(&snapshot)` names the chunks that differ from the snapshot now, `native_client_biomes()` gives the biome table that names and tints the ids (`NativeClientBiomes`) and `native_client_biomes_changed(&biomes)` says when the terrain is drawn with another ([Client world snapshots](#client-world-snapshots)). Bundles need `"hooks": 453`.
+
+API 454 adds `native_item_after_vertical_collision` lends a dropped item's active stack after vertical collision response, before block effects, merging and pickup. The block is the one selected by the legacy on-position query. `client` identifies prediction. Set `discard` (trait `Flow::Cancel`) or reduce the stack to zero to consume the item without loot or pickup. A movement skipped by the normal item tick sends no notification. Bundles need "hooks": 454.
+
+API 455 adds [block states and resource files](#block-states-and-resource-files) for client mods, to keep and use on any thread: `native_block_states()` gives every block state by its id with its facts (name, air, fluid, light, outline, map colour, waterlogged, whether it collides), what its model draws on each side and the texture behind each sprite; `native_client_resources()` reads the resources' files, resource packs' over vanilla's, as bytes or a texture's decoded pixels. Bundles need "hooks": 455.
+
+API 456 adds `native_open_chat(text)` opens the chat screen with `text` typed in for the player to finish and send, as T and / open it; nothing is sent; an error with no player in a world or while another screen is open. Bundles need "hooks": 456.
+
+API 457 adds `native_block_place(player, name, stack, pos, state, cancel)`: a guest is about to place `stack` as `state` at `pos`, heard where `BlockItem.place` has found the position and state and checked survival, before anything is set (Bukkit's `BlockPlaceEvent`, NeoForge's `BlockEvent.EntityPlaceEvent`). Set `cancel` and nothing is placed or used; the client sees the blocks and its inventory as they are and `native_place_block` hears nothing. Bundles that use it need `"hooks": 457`.
+
+API 458 adds `native_chunk_snapshot(dimension, chunk)`, a read-only `NativeChunkSnapshot` of a loaded chunk (block states, surface heights, biomes) that can be read on another thread, with `native_block_map_color(state)`, `native_biome_name(biome)` and `native_biome_tint(biome, x, z)` to draw it. Bundles need "hooks": 458.
+
+API 459 adds `native_command_info(label)` looks up the server's command `label` names, a mod's registered one or vanilla's with its alias resolved (Bukkit's `CommandMap.getCommand`), as a `NativeCommandInfo`: name, aliases, usages, operator level, whether vanilla has it. Bundles need "hooks": 459.
+
+API 460 adds `NativeCommand::permission(node)`: a mod's command that a permission node decides, not the level alone; the server asks `native_has_permission(player, node, level)` before it puts the command in a player's tree and before it runs it, so a permissions mod grants or refuses it (Bukkit's `plugin.yml` `permission:`). Bundles need "hooks": 460.
+
+API 461 adds every console and RCON line before it runs, cancellable, with replies: `native_console_line(source, line, cancel, replies)`, `source` being `console` or `rcon`. Bundles need "hooks": 461.
+
+API 462 adds `native_creative_slot_v2(player, name, slot, stack, cancel)`: an additive version of `native_creative_slot` with the whole stack put in the slot (none for an emptied one), its components included (enchantments, unbreakable, attribute modifiers, contents). Heard just before v1, which hears nothing of a packet canceled here; v1 keeps its signature and firing point. Bundles that use it need `"hooks": 462`.
+
+API 463 adds `native_custom_payload_from_client(player, channel, data)` hears a player's `ServerboundCustomPayloadPacket` in play on any channel that isn't Horizon's own, which vanilla drops: in the tick after it arrives, with no player's state swapped in, from a dead player too. Bundles need "hooks": 463.
+
+API 464 adds `native_handshake(address, host, intent, cancel, reason)` hears each network connection's handshake on its own thread, before the server acts on the intent (1 status, 2 login, 3 transfer): rewrite `host` (what a proxy put after it, Floodgate's data, included), or set `cancel` to refuse; a login or transfer is disconnected with `reason`, a status ping closed unanswered. No `Game` and no helper there. Bundles need "hooks": 464.
+
+API 465 adds `native_inventory_click(player, name, window, slot, button, mode, cancel)`: a guest's click in their own inventory (`window` 0) or a vanilla menu they have open, heard before it is applied (Bukkit's `InventoryClickEvent`), with the packet's slot, button and `ClickType` id. Drags are not heard here; a mod's own menus are `native_menu_clicked`'s. Set `cancel` and nothing moves: the client's predicted slots and cursor are answered with the server's. Bundles that use it need `"hooks": 465`.
+
+API 466 adds `native_inventory_drag(player, name, window, kind, slots, cancel)`: a guest's drag (quick craft) in their own inventory or a vanilla menu ends, heard before it is applied (Bukkit's `InventoryDragEvent`), with its kind (0 even, 1 one each, 2 clone) and the window slots the client dragged over. Set `cancel` and nothing moves: the drag ends empty and the client's predicted slots and cursor are answered with the server's. Bundles that use it need `"hooks": 466`.
+
+API 467 adds `native_item_dropped_v2(player, stack, cancel)`: an additive, cancellable version of `native_item_dropped` (NeoForge's `ItemTossEvent`) with the whole stack thrown, its components included (enchantments, unbreakable, attribute modifiers...). Heard just before v1, which keeps its signature and firing point. Set `cancel` and nothing is thrown: the stack goes back into the player's inventory (what does not fit is thrown, unheard) and v1 hears nothing. Bundles that use it need `"hooks": 467`.
+
+API 468 adds `native_item_picked_up_v2(player, stack, thrower, position, canceled)`: an additive version of `native_item_picked_up` with the whole stack (its components), the item entity's thrower UUID (none for block or mob drops) and its position. Heard just before v1, which hears nothing of a pickup canceled here. v1 keeps its signature and firing point. Bundles that use it need `"hooks": 468`.
+
+API 469 adds each message written to `logs/latest.log`, on the log's writer thread: `native_log_line(level, thread, message, line)`. Bundles need "hooks": 469.
+
+API 470 adds `native_mount(entity, vehicle)`, `native_dismount(entity)` and `native_eject_passengers(vehicle)` seat a server player or mob on a boat, minecart or mob, take it off, or take every rider off, as `/ride` does, with its checks and `native_entity_mount`. Bundles need "hooks": 470.
+
+API 471 adds `native_permission_check(player, node, default_level, result)` lets a permissions mod answer whether a player has a permission node, and `native_has_permission(player, node, default_level)` asks it for every mod and the server, falling back to the player's operator level against `default_level` when no mod answers (Bukkit's `Permissible.hasPermission`, NeoForge's `PermissionAPI.getPermission`). Bundles need "hooks": 471.
+
+API 472 adds `native_attribute(uuid, attribute)` gives an attribute's base and full value (Bukkit's `AttributeInstance.getBaseValue`/`getValue`); `native_set_attribute_base(uuid, attribute, base)` sets the base as `/attribute .. base set`; `native_set_attributes(uuid, saved)` loads a saved `attributes` list as `AttributeMap.load`. Bundles need "hooks": 472.
+
+API 473 adds `native_player_client(uuid)` gives a player's `NativeClientInfo`: the client's brand, its `ClientInformation` (language, view distance, chat visibility, main hand, particles), the chunks it was sent and the bytes on its wire, as Paper's `getClientBrandName`, `locale` and `getClientViewDistance`. Bundles need "hooks": 473.
+
+API 474 adds `native_player_command_level(player, name, command, level)` sets the operator level one typed command of a player runs at, before the server checks it: a permissions mod raises it to grant `/gamemode` to a player of level 0, or lowers it to refuse a command (Paper's `VanillaCommandWrapper` node check). Bundles need "hooks": 474.
+
+API 475 adds `native_player_commands_sent_v2(player, name, names, names_hidden)`: an additive version of `native_player_commands_sent`, heard right after v1, with the root commands the player's level hides in `names_hidden`; one a mod moves into `names` is sent with its subtree, so a granted command completes in the player's chat box. Bundles need "hooks": 475.
+
+API 476 adds `native_player_compound(uuid)` gives a player's compound as the server would save it now (`players/data/<uuid>.dat`, vanilla's `ServerPlayer.saveWithoutId`); None inside a player's turn and for a player not on. Bundles need "hooks": 476.
+
+API 477 adds `native_effects(uuid)` reads a player's effects as `NativeEffect { id, amplifier, duration, ambient, particles }`; `native_add_effect(uuid, effect)` gives one as `LivingEntity.addEffect` (Bukkit's `addPotionEffect`), `native_remove_effect(uuid, id)` takes one off as `/effect clear`, `native_set_effects(uuid, effects)` replaces them all. Bundles need "hooks": 477.
+
+API 478 adds `native_held_stack(uuid)` and `native_player_equipment(uuid, slot)` give the whole stack (components included) in a player's main hand or equipment slot, the acting player's or another's, as Bukkit's `getEquipment().getItemInMainHand()` and `getItem(slot)`. Bundles need "hooks": 478.
+
+API 479 adds player-versus-player damage: `native_player_hurt_by_player(attacker, attacker_entity, victim, victim_entity, source, damage_type, amount, canceled)` names both players by UUID and network entity id, `source` (`melee`, `sweep` or the projectile's entity type, such as `minecraft:arrow`) and the damage type. It is heard where `native_living_incoming_damage` is, at the victim's `hurtServer` past its guards (the `pvp` rule and teams allow it, the victim is not invulnerable or dead), and before it. Change `amount`, or set `canceled` and nothing of the hurt happens (the v1 hook then hears nothing). A snowball's or egg's zero damage is heard with amount 0 and changes nothing. No `self`, like v1. Bundles that use it need `"hooks": 479`.
+
+API 480 adds `native_player_launch_projectile_v2(player, name, stack, cancel)`: a guest is about to throw `stack` (a snowball, an egg, an ender pearl, a mod's thrown item), heard where `ProjectileItem.use` creates the projectile, before it exists (Bukkit's `ProjectileLaunchEvent` for a player). Set `cancel` and nothing is thrown, used or put on cooldown, `native_player_launch_projectile` hears nothing of it, and the client gets its inventory back. Bundles that use it need `"hooks": 480`.
+
+API 481 adds a player leaving the server while still present: `native_player_logging_out(player, name)` is heard once their connection is gone but before their menu closes and they are saved and removed, still in their level and in `native_server_players`, with no state swapped in, so the UUID helpers and `native_run_command` reach them (Bukkit's `PlayerQuitEvent`). A death a mod causes there (`kill <name>`) happens at once, with its drops where they stood. Not heard when the server stops. Bundles that use it need `"hooks": 481`.
+
+API 482 adds a server player's move: `native_player_move(player, name, from, to, yaw, pitch, on_ground, cancel)` is heard for each position or look packet that changed either and passed the server's checks, before it is applied (Bukkit's `PlayerMoveEvent`). Cancel and the player is sent back to `from`; change `to` and they are put there and their client is told. No `self`. Bundles that use it need `"hooks": 482`.
+
+API 483 adds `native_player_permission(player)` gives the permission level (0 to 4, `ops.json`'s for an operator) of a player who is on the server or joining it, also inside `native_player_login` for the player it hears, so a login gate needs no `ops.json` of its own; None for a player who isn't on. Bundles need "hooks": 483.
+
+API 484 adds `native_player_persistent_data(uuid)` reads and `native_set_player_persistent_data(uuid, data)` replaces the compound mods keep on a player, saved in their file as `NeoForgeData` (NeoForge's `Entity.getPersistentData`, Bukkit's `PersistentDataContainer`). Bundles need "hooks": 484.
+
+API 485 adds `native_player_pre_login(player, name, address, defer)` hears a player logging in on the connection's own thread, before the server's own checks: a mod pushes a receiver onto `defer` and answers on it from any thread, `Ok` to let the player on, `Err(reason)` to refuse; the login waits for every answer, 20 s at most. No `Game` and no helper there. Bundles need "hooks": 485.
+
+API 486 adds `native_player_profile(player, name, properties)` hears a joining player's profile on the connection's own thread, once the server has let them in and before it sends `LoginFinished`: change, add or remove `properties` (a skin's `textures`) and the player's own client and every player list get the new ones. No `Game` and no helper there; the hook may block for a lookup. Bundles need "hooks": 486.
+
+API 487 adds `native_player_stats(uuid)` and `native_player_advancements(uuid)` give a player's statistics and advancement progress as vanilla's `players/stats` and `players/advancements` files hold them, `native_player_stat(uuid, type, key)` one counter (Bukkit's `getStatistic`, `getAdvancementProgress`); `native_set_player_stats` and `native_set_player_advancements` replace them from the same JSON and resend them to the client. Bundles need "hooks": 487.
+
+API 488 adds a dead player's respawn point: `native_player_respawn_position(player, name, dimension, pos, yaw, pitch)` is heard once per respawn before the player is placed (NeoForge's `PlayerRespawnPositionEvent`, Bukkit's `PlayerRespawnEvent.setRespawnLocation`), with their bed, anchor, forced point or the world spawn. A changed dimension or position places the player exactly there, with no bed or anchor used; yaw and pitch set their look. An unknown dimension or a non-finite value leaves that part unchanged. Bundles that use it need `"hooks": 488`.
+
+API 489 adds a joining player's spawn location: `native_player_spawn_location(player, name, dimension, position, rotation)` is heard once per join, after `native_player_login` let them in and before they are placed (Spigot's `PlayerSpawnLocationEvent`), with their saved or newly found dimension, feet position and yaw/pitch. Change them and the player is placed there, in that level, with no teleport afterwards; an unknown dimension or a non-finite value leaves that part unchanged. No state is swapped in. Bundles that use it need `"hooks": 489`.
+
+API 490 adds `native_player_food(uuid)` reads a player's food level, saturation and exhaustion; `native_set_player_status(uuid, health, food, xp)` sets each that is given, as Bukkit's `setHealth`, `setFoodLevel`, `setSaturation`, `setExhaustion` and `setExp`; health 0 kills as `/kill` does. Bundles need "hooks": 490.
+
+API 491 adds a server player's teleport before it reaches their client: `native_player_teleport(player, name, cause, from_dimension, from, to_dimension, to, relative, cancel)` (Bukkit's `PlayerTeleportEvent`, NeoForge's `EntityTeleportEvent`) for commands, ender pearls, chorus fruit, a spectator's teleport menu, a dismount and other server moves. A mod may move `to`, cancel, or set the look and motion bits of `relative` (0x1f8 keeps a pearl's speed). No `self`. Bundles that use it need `"hooks": 491`.
+
+API 492 adds `native_player_textures(uuid)` gives the `textures` property (value and signature) of a player who is on, and `native_player_head(uuid)` a `minecraft:player_head` whose profile holds the player's id, plus their name and skin when they are on. Bundles need "hooks": 492.
+
+API 493 adds `native_set_player_view_distance(uuid, distance)` limits one player's view distance below the server's (that player alone is told its radius and sent chunks within it); `native_player_view_distance(uuid)` reads it. Bundles need "hooks": 493.
+
+API 494 adds `native_profile_by_name(name)` gives the id and name, `native_profile_by_uuid(uuid)` the name, of a player who is on or in a dedicated server's profile cache (`usercache.json`), without asking a profile service. Bundles need "hooks": 494.
+
+API 495 adds `native_set_profile_property(player, name, value)` sets or removes a property (a skin's `textures`) of an online player's profile, and `native_refresh_player(player)` shows them again with it: everyone who sees them gets their list entry and entity anew, and the player is respawned in place so their own client draws it too. Both work from any server hook. Bundles need "hooks": 495.
+
+API 496 adds a thrown projectile at the world border: `native_projectile_world_border(dimension, entity, kind, pos, velocity, collide)` is heard each tick a thrown projectile inside the border would end its next step outside it, before 26.3 stops it there (MC-310476). A mod may change its position and velocity, or set `collide` false and it flies through this tick as before 26.3. No `self`. Bundles that use it need `"hooks": 496`.
+
+API 497 adds `native_resend_commands(player)` sends a player their command tree again in the next server tick, with `native_player_commands_sent`, its v2 and the permission nodes of the mods' commands asked anew, as Bukkit's `Player.updateCommands`: after a permissions mod changed what they may use. Bundles need "hooks": 497.
+
+API 498 adds `native_respawn_player(uuid)` respawns a dead server player as their client's Respawn click does, after the players' packets of the server tick. Bundles need "hooks": 498.
+
+API 499 adds `native_run_command_as(player, line)` runs `line` as that player typing it would (Bukkit's `Player.performCommand`): their source and operator level, mods' registered commands included; the answer goes to them and comes back in the `NativeCommandResult`. Bundles need "hooks": 499.
+
+API 500 adds `native_run_command_captured(line)` runs `line` as the console (a mod's registered command going to the mods, anything else to vanilla's) and returns a `NativeCommandResult`: whether it ran, vanilla's result value and the lines it answered with, which reach no one else. Bundles need "hooks": 500.
+
+API 501 adds `native_run_mod_command(line)` runs `line` as the console, a mod's registered command going to the mods and anything else to vanilla's (Bukkit's `dispatchCommand`); whether it ran. Bundles need "hooks": 501.
+
+API 502 adds `native_send_custom_payload_to_player(player, channel, data)` sends a `ClientboundCustomPayloadPacket` on any `namespace:path` channel outside `horizon:` (at most 1 MiB) to one player's client, a vanilla one included, at the tick's end, from any server hook, as Bukkit's `Player.sendPluginMessage`. Bundles need "hooks": 502.
+
+API 503 adds `native_max_players()` gives the server's player limit (Bukkit's `Server.getMaxPlayers`), `native_server_dir()` a dedicated server's folder and `native_log_file()` the `latest.log` this run writes. Bundles need "hooks": 503.
+
+API 504 adds `NativeServerPlayer` also carries `latency` (ms), `protocol`, `xp_level` and `xp_progress`, `on_ground`, the abilities the client is told (`flying`, `may_fly`, `invulnerable`, `walk_speed`, `fly_speed`), `sneaking`, `eye_height` in the current pose, `selected_slot`, and the `nickname` and `hidden` level server mods set, as Bukkit's `getPing`, `isOnGround`, `getAllowFlight`, `isSneaking`, `getEyeHeight` and `getDisplayName` read them. Bundles need "hooks": 504.
+
+API 505 adds `native_set_flight(uuid, allow, flying)` lets a server player fly in any game mode or not, and sets whether they fly now, until their game mode changes, they respawn or leave. Bundles need "hooks": 505.
+
+API 506 adds `native_set_inventory(uuid, kind, slots, selected)` replaces a player's whole inventory (`Player`, 41 slots) or ender chest (`Ender`, 27) as Bukkit's `PlayerInventory.setContents` does, live or in their file like `native_inventory`; for `Player` it also sets the held hotbar slot and empties the cursor and the 2x2 crafting grid, and a player on the server is sent the whole inventory at once. Bundles need "hooks": 506.
+
+API 507 adds `native_set_inventory_slot(uuid, kind, slot, expected, new)` puts a stack in one slot of a player's inventory or ender chest (armour and the off hand too), which must still hold exactly `expected`, and returns what was there (Bukkit's `setItem`); `native_take_stacks(uuid, slots)` takes exact stacks out of the given inventory slots, all or none. Both are checked like `native_move_stack` and work live or on the player's file. Bundles need "hooks": 507.
+
+API 508 adds `NativeCommand` argument kinds `word?`, `text?` and `player_name` make the player's client ask the server for completions; `native_tab_complete_v2(player, name, label, arguments, range, suggestions)` hears the request with the command split into its label and arguments, `range` being the word typed in a mod's command. Bundles need "hooks": 508.
+
+API 509 adds `native_teleport_player(uuid, dimension, pos, yaw, pitch)` teleports a server player as `/tp` does, from any server hook: at once for the acting player or where nobody is swapped in, else after the players' packets of the tick; into another level when the tick's level teleports run. Bundles need "hooks": 509.
+
+API 510 adds `native_teleport_vehicle(dimension, id, pos)` teleports a boat, minecart or mob a rider sits on with its riders, as `/tp` does a vehicle; a server player riding it is told. Only where nobody's state is swapped in. Bundles need "hooks": 510.
+
+API 511 adds farmland trampling: `native_trample(dimension, entity, kind, pos, fall_distance, cancel)` is heard when a player or mob that fell onto farmland is about to turn it to dirt, after vanilla's chance and checks (NeoForge's `FarmlandTrampleEvent`, Bukkit's physical `PlayerInteractEvent` and `EntityInteractEvent`). Cancel and the farmland and its crop stay. No `self`. Bundles that use it need `"hooks": 511`.
+
+API 512 adds `native_vehicle_moved_v2(player, dimension, vehicle, kind, from, to, cancel)`: an additive version of `native_vehicle_moved`, heard right after v1 and also for a ridden mob; cancel and the vehicle is put back at `from` with its riders, change `to` and it is put there. Bundles need "hooks": 512.
+
+API 513 adds `native_world_border(dimension)`, the bounds of a level's world border as the server enforces it (one border for every level in Horizon today). Bundles need "hooks": 513.
+
+API 514 adds `native_block_redstone(dimension, pos, old, new)`: a button, lever or pressure plate about to change its signal from `old` to `new` (0 to 15), as Bukkit's `BlockRedstoneEvent`; change `new` and the component takes it, one equal to `old` keeps it as it is (a held button or plate is asked again). Bundles need "hooks": 514.
+
+API 515 adds `native_boss_bar(uuid, id, bar)` (`host.boss_bar`) shows one player a `NativeBossBar` (name, progress, colour, overlay, flags) under a mod's id, changes it, or takes it away (None), as Bukkit's `BossBar.addPlayer`/`removePlayer`; kept by UUID while they are off. Bundles need "hooks": 515.
+
+API 516 adds `native_chunk_generate(dimension, chunk, seed, flat, chunk_out, generate)` is asked for every chunk a level generates, after its biomes and structure starts and before the noise (Bukkit's `ChunkGenerator.generateNoise`): a mod sets the blocks with `chunk_out.set_block` and answers `NativeGenerate::Replaced { surface, carvers, structures, decorations }`, and vanilla adds only what the flags ask for; `set_biomes` and `clear_structures` work with either answer. It runs on the generation workers, several chunks at once. Bundles need "hooks": 516.
+
+API 517 adds `native_client_entity_spawn(viewer, kind, pos, yaw, nbt)` shows an entity (a text, item or block display, or any type with its custom name, invisibility, glow) to one player's client alone, with its synched data encoded from `nbt` as `/summon` reads it; `native_client_entity_set(viewer, id, nbt)`, `native_client_entity_move(viewer, id, pos, yaw)` and `native_client_entity_remove(viewer, ids)` change, move and take it away. Never simulated, saved or seen by others. `native_reserve_entity_id()` gives an id no server entity takes. Bundles need "hooks": 517.
+
+API 518 adds `native_set_compass_target(uuid, target)` (`host.set_compass_target`) points one player's compass at a dimension and block position, or at the world spawn again (None), as Bukkit's `Player.setCompassTarget`; the target is sent in place of the world spawn until a mod sets it again or they leave, so a respawn or a level change keeps it. Bundles need "hooks": 518.
+
+API 519 adds `native_entity_data_to(viewer, entity, values)` hears each `ClientboundSetEntityDataPacket` the server is about to send one player, its `(index, serializer, value)` entries changeable for that viewer alone (a glowing bit, a name only one player sees), just before `native_server_packet` hears the same packet. Nothing is decoded for it until a mod calls `native_watch_entity_data()`, and then only this packet. Bundles need "hooks": 519.
+
+API 520 adds `native_fishing_hook_landed(player, hook, dimension, block, face)`: a server player's fishing bobber touching a block, as Bukkit's `ProjectileHitEvent` for a `FishHook`: each tick the flying bobber meets a block or lies on one (then the block under its centre, face `[0, 1, 0]`), with the bobber in place so `native_remove_entity` can take it. Bundles need "hooks": 520.
+
+API 521 adds `native_hide_entity_from(viewer, entity, hidden)` hides an entity (a mob, a display, another player) from one player's client alone, or shows it again: their client stops tracking it from the next tick, and a hidden player also leaves their Tab list. Kept while the viewer is on, for that entity id. Bundles need "hooks": 521.
+
+API 522 adds `native_hurt_entity(dimension, target, amount, damage_type, attacker)` hurts a mob or a player of the level as `LivingEntity.hurtServer` and `/damage ... by <attacker>` do (armour, effects, invulnerability time, knockback, death; the damage hooks hear it), the attacker as the causing and direct entity like `damageSources().mobAttack`; whether it was hurt. Bundles need "hooks": 522.
+
+API 523 adds `native_interact_entity_v2(entity, kind, hand, stack, cancel)`: `native_interact_entity` with the hand (`Hand::Main` or `Hand::Off`, NeoForge's `PlayerInteractEvent.EntityInteract.getHand`), asked right after v1, once per hand vanilla tries; a click v1 claimed is not asked again. Bundles need "hooks": 523.
+
+API 524 adds `native_open_inventory_menu(viewer, rows, title, (target, kind), layout)` opens a chest menu that shows another player's inventory or ender chest by a slot layout, live when they are on the server and on their file when they are away; clicks on its shown slots move the target's own items by vanilla's click rules (Bukkit's `openInventory(target.getInventory())`), and it closes once the target leaves, dies or comes back. A mixin helper, not on `Host` (it takes `NativeInventoryKind`, as `native_inventory` does). Bundles need "hooks": 524.
+
+API 525 adds `native_item_from_snbt(snbt)` reads an item stack from SNBT text as vanilla's `TagParser` and `ItemStack.CODEC` do (None for text that is not one compound, for air and for an item the world does not have); `ItemStack::from_nbt(compound)` reads one from a compound without the registry check, and `mod_api::parse_snbt` is the SNBT reader itself. Bundles need "hooks": 525.
+
+API 526 adds `native_kick(player, reason)` disconnects a player with `reason` shown whole, in its colours and translations (Adventure's `Player.kick(Component)`), at the tick's end from any server hook, as `/kick` does: the log names it and `native_player_kicked` hears it. Bundles need "hooks": 526.
+
+API 527 adds `native_level_stats(dimension)` (`NativeLevelStats`: chunks, forced chunks, block entities, ticking block entities, entities and block entities by type), `native_level_entities(dimension)` (id, type, position) and `native_level_block_entities(dimension)` (position, type) for any open level of a server. Bundles need "hooks": 527.
+
+API 528 adds `native_living_change_target(dimension, entity, kind, target, target_mob, cancel)`: a mob's target changed (NeoForge's `LivingChangeTargetEvent`, Bukkit's `EntityTargetEvent`) to the player `target` (a UUID), the mob `target_mob`, or none. Set `cancel` and it keeps its old target, and its tick's hit on the new one is not dealt. No `self`. Bundles that use it need `"hooks": 528`.
+
+API 529 adds `native_living_incoming_damage_v3(victim, victim_uuid, kind, attacker, attacker_uuid, direct, damage_type, amount, cancel)`: `native_living_incoming_damage` everywhere v1 fires, right after it, with a player victim's UUID, the causing entity where v1 has 0 (a mob's or a player's melee, the synchronous attack in progress), a player attacker's UUID and the direct entity; change the amount or cancel as in v1. Bundles need "hooks": 529.
+
+API 530 adds `native_lod_column(dimension, column, seed, flat, column_out)` is asked for each block column the far terrain samples where no chunk is generated yet: a mod whose `native_chunk_generate` builds it answers its blocks with `column_out.replace(spans, biome)`, and the far terrain shows them instead of vanilla's noise. It runs on the far terrain's workers, many columns a tile. Bundles need "hooks": 530.
+
+API 531 adds `native_open_menu_with_input(uuid, rows, title, items, input)` opens a server menu whose slots in `input` take and give items by vanilla's click rules, the rest shown by the mod as in `native_open_menu`; `native_menu_contents(uuid)` reads what an open server menu holds, `native_menu_cursor(uuid)` the stack on the player's cursor (inside `native_menu_clicked`, the one of that click), and `native_menu_input_closed(uuid, window, slots)` hears the input slots as the menu closes: what the mods leave goes back to the player as vanilla's `clearContainer` does. Bundles need "hooks": 531.
+
+API 532 adds `native_new_map(dimension, colors)` makes a locked map of the world showing a 128 x 128 picture, under the world's next map id, saved with its maps and sent like any map to whoever carries it or sees it framed (Bukkit's `Server.createMap`); `native_paint_map(map_id, colors)` replaces a map's whole picture the same way (`MapCanvas`). Bundles need "hooks": 532.
+
+API 533 adds `native_spawn_mob(dimension, kind, pos, options)` and `native_summon(dimension, kind, pos, nbt)` for any level the server has loaded: the level is put in place for the spawn and the one that was is put back, as `execute in <dimension> run summon` does, so a `native_server_tick` hook spawns into the Nether or the End. A level not loaded is refused. Bundles need "hooks": 533.
+
+API 534 adds `native_entity_by_uuid(uuid)`, the dimension, id and type of the entity with that UUID in any loaded level, a server's player included (Bukkit's `Server.getEntity(UUID)`), and `native_merge_entity_nbt(dimension, id, nbt)`, `native_entity_merge_nbt` for any loaded level (`execute in <dimension> run data merge entity`). Bundles need "hooks": 534.
+
+API 535 adds `native_set_entity_rotation(dimension, id, yaw, pitch, head_yaw)`, an entity of any loaded level turned without moving it as `/rotate` does (`Entity.forceSetRotation`), with `head_yaw` turning a mob's head alone (`setYHeadRot`): mobs, mannequins, armor stands, boats, minecarts, fangs and displays. Bundles need "hooks": 535.
+
+API 536 adds `native_mob_attack(dimension, mob, target)`, a mob's own attack (`Mob.doHurtTarget`: attack damage, weapon, enchantments, knockback, the species' extras) on a living mob or a server's player of its level, from any server hook, with no reach check or swing, as vanilla's attack goal checks and swings first. Bundles need "hooks": 536.
+
+API 537 adds a mob of any loaded level driven as vanilla's goals drive it: `native_mob_navigate(dimension, mob, to, reach, speed)` (`PathNavigation.moveTo` to a point, round walls), `native_mob_follow(dimension, mob, target, speed)` (`moveTo` an entity, a player too), `native_mob_stop(dimension, mob)`, `native_mob_navigating(dimension, mob)` (`isInProgress`) and `native_mob_look_at(dimension, mob, at)` (`LookControl.setLookAt`). Bundles need "hooks": 537.
+
+API 538 adds `native_play_sound_to(uuid, sound, category, at, volume, pitch)` (`host.play_sound_to`) plays a sound to one player alone, at `at` or where they stand, in a `SoundSource` category by name, as Bukkit's `Player.playSound`; it leaves at the tick's end, so it works from any server hook. Bundles need "hooks": 538.
+
+API 539 adds `native_player_register_channels(player, name, channels, register)` hears the plugin channels a client registers (`minecraft:register`) or unregisters (`minecraft:unregister`), the configuration's once right after `native_player_logged_in`, as Bukkit's `PlayerRegisterChannelEvent`; `native_player_channels(player)` lists what it has registered, as `Player.getListeningPluginChannels`. Bundles need "hooks": 539.
+
+API 540 adds `native_player_fish_v2(player, name, state, hand, cancel)`: `native_player_fish` with the rod's hand (the hand used for a cast or reel-in, Bukkit's `PlayerFishEvent.getHand`; for a bite the hand holding the rod, main hand first), asked right after v1 with the same `cancel`. Bundles need "hooks": 540.
+
+API 541 adds `native_remove_entity(dimension, id)` also removes projectiles (arrows, tridents, snowballs, eggs, pearls, fireballs, wind charges, llama spit, shulker bullets, firework rockets) as `/kill` does, and a server player's fishing bobber (`Entity.discard`): the player in place's, or outside a guest's turn any of the level's players'. Bundles need "hooks": 541.
+
+API 542 adds `native_resource_pack_status_v2(player, name, pack, status)`: an additive version of `native_resource_pack_status` with the answered pack's id (Bukkit's `PlayerResourcePackStatusEvent.getID`), heard just before v1 in play, and also for the answers to the server's own pack given during the configuration, once the player has logged in. v1 keeps its signature and firing point. Bundles need "hooks": 542.
+
+API 543 adds `native_send_resource_pack(player, id, url, sha1, prompt, required)` offers one player's client a resource pack under the mod's own id (Bukkit's `Player.addResourcePack`), and `native_pop_resource_pack(player, id)` takes that pack, or with None every server pack, away again (`removeResourcePack`). Bundles need "hooks": 543.
+
+API 544 adds `native_right_click_block_v2(pos, face, hand, cancel)`: `native_right_click_block` with the hand (`Hand::Main` or `Hand::Off`, NeoForge's `PlayerInteractEvent.RightClickBlock.getHand`), asked right after v1, once per hand tried; a click v1 canceled is not asked again. Bundles need "hooks": 544.
+
+API 545 adds `native_send_particles_to(uuid, options, state, at, spread, speed, count, force)` (`host.send_particles_to`) shows particles to one player alone, within 32 blocks or 512 with `force`, as vanilla's `ServerLevel.sendParticles(player, ...)` and Bukkit's `Player.spawnParticle`; it leaves at the tick's end, so it works from any server hook. Bundles need "hooks": 545.
+
+API 546 adds `native_server_packet(player, packet, cancel)` hears each play packet the server is about to send one player's client, decoded, a broadcast once for each player: change `packet` and that client gets the changed one, set `cancel` and it gets nothing (ProtocolLib's outgoing listener). Nothing is decoded or copied until a mod calls `native_watch_server_packets()`. Bundles need "hooks": 546.
+
+API 547 adds `native_server_packets(player, packets, outbound)`, once a tick per player and way, each packet as (id, body bytes), while `native_count_packets(true)` is on (off, nothing is kept). Bundles need "hooks": 547.
+
+API 548 adds `native_server_tick_timed(wall_ms, cpu_ms, spans)` after each server tick pass while spans are recorded (always on a dedicated server; elsewhere after `native_spans(true)`), and mob costs by level and type a mod samples apart from `horizon-report` (`native_mob_cost_sampling(on)`, `native_take_mob_costs()`). Bundles need "hooks": 548.
+
+API 549 adds `native_set_display_name(uuid, name)` shows styled text for a player in chat (their messages, `/me`, `/msg`, the join and leave lines) in place of their nickname or name (None: back), inside their team's formatting, the real name on hover. Kept by UUID. Bundles need "hooks": 549.
+
+API 550 adds `native_set_list_name(uuid, name)` shows styled text for a player in everyone's Tab list in place of their nickname or name (None: back), kept by UUID and sent with every later entry (a join, a vanish ending). Bundles need "hooks": 550.
+
+API 551 adds `native_set_name_tag(uuid, tag)` shows a plain name (1 to 16 ASCII characters, no spaces) over a player's head for everyone else in place of theirs (None: back): their list entries carry it as the profile name, and the others' clients get their entry and entity again at once. Chat, commands and selectors keep the real name. Kept by UUID. Bundles need "hooks": 551.
+
+API 552 adds `native_tick_times()`, the last 100 tick durations in nanoseconds at vanilla's `getTickTimesNanos` indices, and `native_tps()`, the ticks a second over the last one, five and fifteen minutes (Bukkit's `getTPS`). Bundles need "hooks": 552.
+
+API 553 adds `native_title(uuid, title, subtitle, fade_in, stay, fade_out)` (`host.title`) shows a title and subtitle with their times on one player's screen, as `/title` and Adventure's `showTitle`. Bundles need "hooks": 553.
+
+API 554 adds `native_world_seed()`, the world's seed as `/seed` prints it (Bukkit's `World.getSeed`), the one every level generates from; None off a server. Bundles need "hooks": 554.
+
+API 555 adds `native_take_screenshot()` takes a screenshot of the next frame as F2 does, into `screenshots/`, and returns the file it will write; an error without a window or while another screenshot waits for the frame. Bundles need "hooks": 555.
+
+API 556 adds lists of the entities and dropped items a client shows, for client mods such as radars, name tags and spectator ESP ([Entities a client sees](#entities-a-client-sees)): `native_client_entities()` also gives each entity's type, yaw, baby, spectator and the texture its body draws with, and `position_at(partial_tick)` where the frame draws it; `native_client_items()` lists the dropped items the client shows; `native_client_texture(name)` gives the pixels of an entity texture or a player's skin, downloaded ones included. Bundles need "hooks": 556.
+
+API 557 adds `native_chat_input()` gives the open chat box's text and cursor, `native_set_chat_input(text, cursor)` replaces them as an edit (completions refresh); an error while the chat is closed. Bundles need "hooks": 557.
+
+API 558 adds the local player's combat as the window sees it, on any server: `native_client_attack(target, player)` when it attacks an entity, `native_client_hurt(attacker, player)` when the server says it was hurt; `player` says whether the other side is a player. Client only, no answer. Bundles need "hooks": 558.
+
+API 559 adds what a client HUD reads of its session: `native_client_state()` gains `screen` (`NativeScreenKind`: playing, chat, death or another screen), `debug_screen` (F3), `world` (`NativeWorldId`: single player's save folder or a server's address, for per-world data) and `sleeping_pos` (the bed); `native_biome(pos)` is the biome at a block as `Level.getBiome` picks it, and `native_data_dir(mod_id)` a mod's own folder. Bundles need "hooks": 559.
+
+API 560 adds `native_screen_text_field_char_typed_pre(screen, field, character, modifiers, canceled)` exposes NativeTextField before each surviving character is inserted. Edit value/cursor/highlight and cancel to replace the character yourself. Indices count Unicode scalar characters; max_length() and multiline() are read-only host limits. Actual text-box filters, limits and responders still apply. API104 runs exactly once before this hook for each character, including title keyboard/control input, which previously bypassed that filter. Supported: ordinary title fields, chat/command inputs, creative/recipe/mod-browser searches, anvil rename, social and debug search. Options, preparing screens, game-rule/numeric editors, books, signs and dialogs keep their existing specialized paths. Chat suggestions are separate. Bundles need "hooks": 560.
+
+API 561 adds `native_draw_fluid_box(draw,stack,bounds,options)` draws a `NativeFluidStack` in `[xMin,yMin,zMin,xMax,yMax,zMax]` under a block entity/mob draw pose. Supports `minecraft:water` and `minecraft:lava` with an empty component patch; unsupported IDs/patches, nonfinite/reversed bounds and boxes exceeding 65,536 tiled quads return false without partial geometry. Empty accepted amounts return true without validating bounds and emit nothing. `NativeFluidRenderOptions` requires `argb:Option<u32>` (stack tint override, default plain water 0xff3f76e4/lava white), `render_bottom:bool`, and `uv_shrink_ratio:f32` (0..1, source TextureAtlasSprite ratio 4 / the largest stitched atlas dimension; explicit because Horizon uses sprite arrays). Faces tile at integer boundaries with local UV fractions, no geometry inset. The still sprite follows resource packs/animations/mipmap settings; nearest texels use linear mip selection. Luminosity raises block light (lava 15), preserving sky light; vertex colors have no model diffuse shading. A separate material sorts far to near, alpha blends, culls backs and writes ordinary color/depth, with no alpha discard. It draws with block entities before terrain transparency, separately from improved-transparency queues and the world canvas. Bundles need "hooks": 561.
+
+API 562 adds `native_draw_terrain_model(draw,model,NativeModelRenderOptions)` draws a standalone model with animated block sprite arrays. Material `Model` respects solid/cutout/cutout_mipped quads, or explicitly select `Solid`, `Cutout` or `CutoutMipped`. Cutout uses alpha .1 without mipmaps; mipmapped cutout uses .5. All cull backs and use ordinary opaque color/depth writes. `NativeModelShade::{Model,Off,Entity}` controls directional shading independently of light, including fullbright. `NativeModelUvShift` names original/target sprites and unit-sprite scale/offset; invalid/missing mappings fail before geometry. `uv_shrink_ratio` defaults zero and explicitly supports older FaceBakery UV policy without guessing atlas dimensions. `tint` defaults white and multiplies only tinted quads. Ordinary native model/fluid/Canvas/OIT behavior is unchanged. Bundles need "hooks": 562.
+
+API 563 adds Before a wind burst interacts with blocks, `native_wind_burst(dimension, center, blocks)` receives the shuffled candidate positions. Remove positions to spare those blocks; entity knockback and the shuffle's random draws are unchanged. Not called when mob_griefing prevents a breeze from interacting with blocks. Bundles need "hooks": 563.
+
+API 564 adds `native_chat_suggestion_applied(original, start, end, suggestion, input)` reports a chat completion after Tab or a click. The range is in UTF-16 units of the list's original input, including when cycling; input is the resulting length-limited field value. Client-only, read-only. Bundles need "hooks": 564.
+
+API 565 adds `level.seed(host)`, `difficulty`, `game_rule(host, name)` (`GameRuleValue`), `weather`, `is_raining` and `is_thundering`. Bundles need "hooks": 565.
+
+API 566 adds `level.play_sound(host, sound, at, source, volume, pitch)` and `level.send_particles(host, options, state, at, spread, speed, count)`: every player in range hears or sees them, as `ServerLevel.playSound` and `sendParticles` send them. Bundles need "hooks": 566.
+
+API 567 adds `entity.is_shift_key_down(host)`, `is_crouching`, `is_sprinting`, `is_in_water`, `is_in_lava`, `fire_immune`, `fire_ticks`, `air_supply`, `max_air_supply`, `is_silent`, `set_silent(host, silent)`, `is_invisible` and `pose` (`standing`, `crouching`...). Players and mobs have them all; other kinds return `None` for what Horizon doesn't keep for them. Bundles need "hooks": 567.
+
+API 568 adds `entity.teleport_to(host, pos, rotation)` and `set_rotation(host, yaw, pitch)` (as `/tp` and `/rotate` move and turn it), `head_yaw`, `set_head_yaw`, `direction` (`north`...), `dimensions` (width, height) and `push(host, delta)`. Bundles need "hooks": 568.
+
+API 569 adds `hud_mode()` reads the effective `HudMode`; `set_hud_mode(mode)` selects `AllVisible`, `NoHud` (HUD hidden, hands allowed) or `AllHidden`. Existing `input_key` runs after vanilla F1 handling and may set the mod's own three-state mode there. F1 still toggles all visible/all hidden without a mod. Other hand gates (spectator, camera, sleeping, death) and `render_hand` cancellation remain in effect. `gui_render_post` and `client_state.gui_hidden` report the effective HUD visibility. Bundles need "hooks": 569.
+
 ## What the launcher does
 
 **Developing a mod?** Run `horizon-launcher settings native-profile dev` once, or pick "Dev build" in the Mods page's
@@ -2194,7 +2515,7 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
   `number`, `boolean`, `player`, `item`, `block_pos`. The usages of one command merge into one tree, which every
   player receives after vanilla's (filtered by their level, as vanilla's is), so their chat box completes and colours
   it. A name vanilla has, or a usage that doesn't parse, is left out with a warning in the log.
-- **`native_refresh_commands()`** (`host.refresh_commands()` for trait mods, API @API:refresh_commands@): a helper for
+- **`native_refresh_commands()`** (`host.refresh_commands()` for trait mods, API 445): a helper for
   a mod whose commands change while the server runs (a plugin host that reloads a plugin, a mod turned on at run time).
   At the start of the next server tick every mod's `native_register_commands` is asked again, the commands players may
   run (`native_perform_command`, with their levels) are rebuilt, and every player on the server is sent their tree
@@ -2563,14 +2884,14 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
   the panel, the `save-off` around its backups) and `rcon` for an RCON command; `line` is as given, a leading slash
   included. Set `cancel` and it does not run. Push to `replies` to answer: each line is logged as the console's
   feedback is, so it also reaches the RCON client or the `horizon-server` caller. There is no player (the console is
-  level 4). An audit log's `ServerCommandEvent`/`RemoteServerCommandEvent`. Bundles need `"hooks": @API:console_line@`.
+  level 4). An audit log's `ServerCommandEvent`/`RemoteServerCommandEvent`. Bundles need `"hooks": 461`.
 - **`native_log_line(level, thread, message, line)`** (`horizon_client_lib::native_client_hooks`): a message was
   written to `logs/latest.log`, so a console bridge needs no tailing of the file. `level` is `INFO`, `WARN` or `ERROR`,
   `thread` the thread the line names, `message` the text and `line` what the file got (`[HH:mm:ss] [thread/LEVEL]:
   message`). It runs on the log's own writer thread after the file is written, never on the server or render thread,
   so a slow mod holds up no tick; it has no `Game`, and a line a mod logs from it comes back to it later (don't log
   each line you hear). Lines the flood limit leaves out are not heard, and a mod that panics in it is not called again.
-  Bundles need `"hooks": @API:log_line@`.
+  Bundles need `"hooks": 469`.
 
 #### Server hooks for plugin ports: connection
 
@@ -2585,7 +2906,7 @@ before (#10461).
   server itself reads nothing from it), or set `cancel` to refuse the connection: a login or a transfer is disconnected
   with `reason` (a plain "Disconnected" if unset), a status ping is closed unanswered. The legacy `0xFE` ping and an
   integrated server's own player are not heard. There is no `Game` on this thread, so no helper works and `native_tell`
-  reaches nobody; keep the hook short, the connection waits for it. Bundles need `"hooks": @API:handshake@`.
+  reaches nobody; keep the hook short, the connection waits for it. Bundles need `"hooks": 464`.
   With proxy forwarding on (`forwarding.secret`, offline mode) the server reads the handshake's host up to 32767
   characters, as Paper does behind a proxy, so a Floodgate player's long data reaches the hook; without forwarding the
   limit stays vanilla's 255.
@@ -2595,19 +2916,19 @@ before (#10461).
   a proxy's or a client mod's channels. `data` is the client's bytes, checked by nothing. It runs in the tick after the
   message arrived, in arrival order, with the hub back and no player's state swapped in, so every helper works; it is
   heard from a dead player too. Every guest is heard (a single player world's own player sends none). The client side,
-  a window's own plugin channels, is #6774. Bundles need `"hooks": @API:custom_payload_from_client@`.
+  a window's own plugin channels, is #6774. Bundles need `"hooks": 463`.
 - Helper **`native_send_custom_payload_to_player(player, channel, data)`** (`host.send_custom_payload_to_player`):
   sends `data` on a plugin channel (`namespace:path`, not Horizon's own `horizon:` ones, at most 1 MiB as
   `ClientboundCustomPayloadPacket` takes) to one player's client, a vanilla client included, as Bukkit's
   `Player.sendPluginMessage`. It is queued and leaves at the tick's end, so it works from any server hook, a player's
   own included; `Ok` means queued, and a player who isn't on by then gets nothing. Unlike `native_net_send_to_player`
   nothing caps or frames it. An error on a client, and for a bad channel or size. Bundles need
-  `"hooks": @API:send_custom_payload_to_player@`.
+  `"hooks": 502`.
 - Helper **`native_player_permission(player)`** (`host.player_permission`): the permission level of a player who is on
   the server or joining it, 0 to 4, an operator's from `ops.json` above 0 (`PlayerList.getProfilePermissions`). It also
   works inside `native_player_login`, for the player that hook hears (their level is set by then), so a login gate that
   lets operators through needs no `ops.json` of its own. Inside a player's hook, with the hub out of reach, only that
-  player is found; None for a player who isn't on, and on a client. Bundles need `"hooks": @API:player_permission@`.
+  player is found; None for a player who isn't on, and on a client. Bundles need `"hooks": 483`.
 
 #### Server hooks for plugin ports: players
 
@@ -2659,7 +2980,7 @@ server only.
   pre-generator's `worldborder` selection. Vanilla 26.3 keeps a border per level (`ServerLevel.getWorldBorder`, each
   level's `data/minecraft/world_border.dat`, `/worldborder` changing the level it runs in); Horizon keeps one for every
   level today, so the three levels answer the same bounds until that is fixed, and the helper then answers each level's
-  own. None for another dimension. API @API:world_border@.
+  own. None for another dimension. API 513.
 - **`native_set_player_view_distance(uuid, distance)`** (`native_view_distance.rs`): limits one player's view distance
   to `distance` chunks (2 to 32), None gives it the server's again. The player's distance is the smallest of the
   server's, what its client asked for and the limit; only that player is told its radius (`SetChunkCacheRadius`), and
@@ -2668,7 +2989,7 @@ server only.
   the server's and limit the others to give one player more). It lasts until the player leaves.
   `native_player_view_distance(uuid)` is the distance the player has now. Both answer false/None for a player not online
   and inside a guest's packet hook, where the hub is taken out: call them from a tick or console hook. API
-  @API:player_view_distance@.
+  493.
 - **`native_chunk_snapshot(dimension, [x, z])`** (`native_chunk_snapshot.rs`): a `NativeChunkSnapshot` of a loaded
   chunk of a level that is open (in place or with nobody in it), None for a chunk not loaded (nothing is loaded for
   it). It shares the chunk's sections until the level changes them, so it is cheap to take on the server thread and
@@ -2678,7 +2999,7 @@ server only.
   `has_ceiling()`, in the level's block coordinates; outside the chunk it answers None. To draw it:
   `native_block_map_color(state)` is `(MapColor id, MapColor.col)`, `native_biome_name(biome)` the biome's name and
   `native_biome_tint(biome, x, z)` its grass (with the dark forest and swamp modifiers), foliage, dry foliage and water
-  colours (`BiomeColors`, after `native_biome_colors`, not blended). API @API:chunk_snapshot@.
+  colours (`BiomeColors`, after `native_biome_colors`, not blended). API 458.
 
 #### Server hooks for plugin ports: permission nodes
 
@@ -2690,11 +3011,11 @@ server's command tree ask. Without such a mod every answer is the operator level
   `PermissionAPI.getPermission` ask it. A permissions mod sets `result`; the first mod that sets it decides. Left None,
   the answer is the player's operator level against `default_level` (0 lets everyone). It is asked through `&self`
   (a provider reads what it knows) and often with the hub out of reach, for players on the server, joining or unknown
-  to it, so answer from the mod's own data. Server-side. Bundles need `"hooks": @API:permission_check@`.
+  to it, so answer from the mod's own data. Server-side. Bundles need `"hooks": 471`.
 - Helper **`native_has_permission(player, node, default_level)`** (`host.has_permission`): asks
   `native_permission_check`, and when no mod answers, whether the player's operator level is `default_level` or above.
   The level is the server's for a player who is on or joining, the acting player's inside their hook; anyone else, and
-  every player on a client, counts as level 0. Bundles need `"hooks": @API:permission_check@`.
+  every player on a client, counts as level 0. Bundles need `"hooks": 471`.
 - **`native_player_commands_sent_v2(player, name, names, names_hidden)`**: an additive version of
   `native_player_commands_sent`, heard right after v1 at the same times (join, a change of level, a resend) with
   `names` as v1 left it. `names_hidden` lists the root commands an operator of level 4 would get that this player's
@@ -2702,7 +3023,7 @@ server's command tree ask. Without such a mod every answer is the operator level
   with everything under it, as an operator of its level gets it (Paper's `PlayerCommandSendEvent` after a permission
   check passed), so their client completes and highlights it; take a name out of `names` to hide it, as with v1. Only
   the tree changes: running a granted vanilla command still needs its level (`native_player_command_level`). Mods are
-  asked in order and share both lists. Bundles need `"hooks": @API:player_commands_sent_v2@`.
+  asked in order and share both lists. Bundles need `"hooks": 475`.
 - **`NativeCommand::permission(node)`** (`NativeCommand::new("tpa <player:player>").permission("essentials.tpa")`): a
   mod's command that a permission node decides, as Bukkit's `plugin.yml` `permission:`. Before the server puts it in a
   player's tree and before it runs a player's typed one, it asks `native_has_permission(player, node, level)` with
@@ -2710,7 +3031,7 @@ server's command tree ask. Without such a mod every answer is the operator level
   operator; without one the level decides, as for a command without a node. `native_player_commands_sent_v2` then
   hears a command its node refuses in `names_hidden` and one it grants in `names`. A command's node is the first one
   its usages give. A dedicated server's console runs every registered command without asking. Bundles need
-  `"hooks": @API:command_permission@`.
+  `"hooks": 460`.
 - **`native_player_command_level(player, name, command, level)`**: the operator level one typed command of a player
   runs at, before the server checks it (Paper's `VanillaCommandWrapper`, which asks `minecraft.command.<name>` instead
   of the level). `level` comes in as the player's own; raise it to grant this command (`/gamemode` at 2 for a player of
@@ -2720,13 +3041,13 @@ server's command tree ask. Without such a mod every answer is the operator level
   mods' dispatch run; not for the chat commands the server answers itself (`/me`, `/msg` and its aliases, `/say` from
   a player allowed it), `/list`, the chat filter's and Horizon's `/tempban` commands, nor a mod's quiet commands, and a LAN world without Allow Commands still refuses its guests' vanilla
   commands. The hub is out of reach and no player's state is swapped in: answer from the mod's own data. Server-side.
-  Bundles need `"hooks": @API:player_command_level@`.
+  Bundles need `"hooks": 474`.
 - Helper **`native_resend_commands(player)`** (`host.resend_commands`): sends a player their command tree again, with
   `native_player_commands_sent`, its v2 and the permission nodes of the mods' commands asked anew, as Bukkit's
   `Player.updateCommands`: after a permissions mod changed what they may use (a `/lp` edit, a sync from another
   server). The tree goes out in the next server tick, so it works from any server hook, the player's own included
   (calling it from the commands-sent hooks themselves would send the tree every tick). True when the player is on;
-  false for anyone else and on a client. Bundles need `"hooks": @API:resend_commands@`.
+  false for anyone else and on a client. Bundles need `"hooks": 497`.
 
 #### Running commands from mods
 
@@ -2736,23 +3057,23 @@ server's command tree ask. Without such a mod every answer is the operator level
   vanilla's. `ran` says it ran without failing, `result` is vanilla's result value (the sum of the successful results,
   one per fork of `execute as @a run ...`; 0 for a failed `execute if entity`; 1 for a mod's command a mod ran), and
   `output` holds the lines it answered with, which reach no one else, operators included. Where `native_run_command`
-  runs (no player swapped in); inside a player's hook nothing runs. Bundles need `"hooks": @API:run_command_captured@`.
+  runs (no player swapped in); inside a player's hook nothing runs. Bundles need `"hooks": 500`.
 - `native_run_command_as(player, line) -> NativeCommandResult`: `line` runs as that player typing it would (Bukkit's
   `Player.performCommand`): their source, operator level and position, so `/gamemode creative` for a level-0 player
   is refused with vanilla's error; a command a mod registered goes to the mods when their level allows it. The answer
   is sent to them as their own command's, and the same lines come back in `output`. `native_player_command` doesn't
   hear it. Where `native_run_command` runs, or inside that player's own hook (`native_perform_command`: the lines
   join its feedback); for anyone else, or a player not on the server, nothing runs. Bundles need
-  `"hooks": @API:run_command_as@`.
+  `"hooks": 499`.
 - `native_run_mod_command(line) -> bool`: `native_run_command` that reaches the mods' commands too (Bukkit's
   `Bukkit.dispatchCommand` from the console): a command a mod registered goes to the mods
   (`native_perform_console_command`), anything else to vanilla's. True when a mod took it or vanilla's ran without
-  failing; no output. Bundles need `"hooks": @API:run_mod_command@`.
+  failing; no output. Bundles need `"hooks": 501`.
 - `native_command_info(label) -> Option<NativeCommandInfo>`: the server's command `label` names (Bukkit's
   `CommandMap.getCommand`), a leading slash allowed: one a mod registered, else vanilla's with an alias resolved (`tp`
   gives `teleport`, whose `aliases` hold `tp`). `usages` are the mod's registered usages, or vanilla's one line as
   `/help` gives it; `level` is the operator level a player needs, `vanilla` whether vanilla has it. None when no
-  command has that name. Bundles need `"hooks": @API:command_info@`.
+  command has that name. Bundles need `"hooks": 459`.
 - Argument kinds that ask the server, for `native_register_commands`' usages: `word?` (a word) and `text?` (the rest
   of the line, last) are sent with vanilla's `ask_server` suggestions, so the player's client asks the server for
   their completions instead of completing nothing; `player_name` is a word that does the same, any name accepted
@@ -2762,7 +3083,7 @@ server's command tree ask. Without such a mod every answer is the operator level
   `arguments` the words after it split at each space, the last the one being typed (empty after a space). For a
   command a mod registered, `range` is that word, and for `player_name` `suggestions` already holds the names; push
   yours over `range`. No player's state is swapped in and the server's players are out of reach
-  (`native_server_players` gives none). Bundles need `"hooks": @API:tab_complete_v2@`.
+  (`native_server_players` gives none). Bundles need `"hooks": 508`.
 
 #### Server hooks for plugin ports: Movement and teleports
 
@@ -2855,7 +3176,7 @@ parsing before (#10461).
   them with that reason. The login waits for every answer, 20 s at most in all (a vanilla client gives up after 30 s
   of silence); an answer that doesn't come by then, or whose sender is dropped, refuses with a plain "Disconnected".
   Mods' loads run side by side. The integrated server's own player is not heard, and there is no `Game` on this
-  thread. Bundles need `"hooks": @API:player_pre_login@`.
+  thread. Bundles need `"hooks": 485`.
 - **`native_player_profile(player, name, properties)`**: a free function in `horizon_client_lib::lan::conn`, heard on
   the connection's own thread once the server has let a player in (name, whitelist, bans and player limit checked) and
   before it sends `LoginFinished` (Velocity's `GameProfileRequestEvent`). `properties` are the profile's, as the session
@@ -2864,7 +3185,7 @@ parsing before (#10461).
   player list get the new ones, so a skin mod sets a stored `textures` here before anyone sees the old one. The
   integrated server's own player is not heard. There is no `Game` on this thread, so no helper works; the hook may block
   for a lookup, the login waits for it (a vanilla client gives up after 30 s of silence). Bundles need
-  `"hooks": @API:player_profile@`.
+  `"hooks": 486`.
 
 - Helpers **`native_set_profile_property(player, name, value)`** (`host.set_profile_property`) and
   **`native_refresh_player(player)`** (`host.refresh_player`): a skin changed while the player is on (Paper's
@@ -2876,7 +3197,7 @@ parsing before (#10461).
   entry anew and their entity again, and the player is respawned in place into the level they are in, all state kept,
   so their own client draws the new skin too (a dead player only to the others). Both work from any server hook,
   `native_server_tick` included; true does not mean the player was found. Bundles need
-  `"hooks": @API:profile_refresh@`.
+  `"hooks": 495`.
 
 - Helpers **`native_player_textures(uuid)`** (`host.player_textures`) and **`native_player_head(uuid)`**
   (`host.player_head`): the `textures` property of a player who is on, its value and signature as their player list
@@ -2884,13 +3205,13 @@ parsing before (#10461).
   `SkullMeta.setOwningPlayer`) whose `minecraft:profile` holds their id, plus their name and skin when they are on,
   so it shows the skin at once (a profile of an id alone the client resolves itself). Where the hub is out of reach
   (inside a player's own hook) the textures are None and the head carries the id only. Bundles need
-  `"hooks": @API:player_textures@`.
+  `"hooks": 492`.
 
 - Helpers **`native_profile_by_name(name)`** (`host.profile_by_name`) and **`native_profile_by_uuid(uuid)`**
   (`host.profile_by_uuid`): a player the server knows, by name in any case (their id and name as written) or by id
   (their name): one who is on, else one in a dedicated server's profile cache, `usercache.json` (vanilla's
   `GameProfileCache`, Bukkit's `getOfflinePlayer` without its network lookup). They ask no profile service and make
-  up no offline player; None when nobody is found. Bundles need `"hooks": @API:profile_cache@`.
+  up no offline player; None when nobody is found. Bundles need `"hooks": 494`.
 
 #### Server hooks for plugin ports: player state
 
@@ -2903,7 +3224,7 @@ calls them without a mod.
 - Helper **`native_player_compound(uuid)`**: the player's compound as the server would save it now
   (`players/data/<uuid>.dat`, vanilla's `ServerPlayer.saveWithoutId`), with every key Horizon keeps without modelling
   it. None inside a player's turn (their live state is out of their record) and for a player not on.
-  Bundles need `"hooks": @API:player_compound@`.
+  Bundles need `"hooks": 476`.
 - Helpers **`native_player_food(uuid)`** and **`native_set_player_status(uuid, health, food, xp)`**: the food level,
   saturation and exhaustion (`FoodData`); and health, food `(level, saturation, exhaustion)` and experience
   `(level, progress, total)` set, each when given, as Bukkit's `setHealth`, `setFoodLevel`, `setSaturation`,
@@ -2911,25 +3232,25 @@ calls them without a mod.
   kills them as `/kill` does, with the death message "<player> died" (Bukkit's `setHealth(0)`). The mod's food is not
   heard by `native_food_level_changed`, except inside the player's own turn. False for a player not reached, a dead one,
   a value that is not a number, a negative level or total, or a progress outside 0 to 1.
-  Bundles need `"hooks": @API:player_status@`.
+  Bundles need `"hooks": 490`.
 - Helpers **`native_effects(uuid)`**, **`native_add_effect(uuid, effect)`**, **`native_remove_effect(uuid, id)`** and
   **`native_set_effects(uuid, effects)`**: a player's effects as `NativeEffect { id, amplifier, duration, ambient,
   particles }` (`MobEffectInstance`; duration -1 is infinite); one given as `LivingEntity.addEffect` gives it (Bukkit's
   `addPotionEffect`: a weaker or shorter one of the kind waits under it), one taken off as `/effect clear` takes it, or
   all replaced (a saved player's potion effects restored). The client gets `UpdateMobEffect` with the ambient and
   particle flags. Horizon keeps no hidden-icon flag on an effect, so the icon always shows. Unknown effects and a
-  duration of 0 or below -1 are refused. Bundles need `"hooks": @API:player_effects@`.
+  duration of 0 or below -1 are refused. Bundles need `"hooks": 477`.
 - Helpers **`native_attribute(uuid, attribute)`**, **`native_set_attribute_base(uuid, attribute, base)`** and
   **`native_set_attributes(uuid, saved)`**: an attribute's base value and its value with every modifier (Bukkit's
   `AttributeInstance.getBaseValue` and `getValue`); its base set as `/attribute .. base set` does; a saved
   `attributes` list (the compound's) loaded as `AttributeMap.load` reads a player's file. A lower `max_health` caps the
   health, and the client gets `UpdateAttributes`. An id without a namespace is `minecraft:`'s.
-  Bundles need `"hooks": @API:player_attributes@`.
+  Bundles need `"hooks": 472`.
 - Helpers **`native_player_persistent_data(uuid)`** and **`native_set_player_persistent_data(uuid, data)`**: the
   compound mods keep on a player (NeoForge's `Entity.getPersistentData()`, Bukkit's `PersistentDataContainer`), saved in
   their file as `NeoForgeData`; an empty compound when there is none, and
   setting an empty one takes it away. Mods share it: keep your keys under your namespace.
-  Bundles need `"hooks": @API:player_persistent_data@`.
+  Bundles need `"hooks": 484`.
 
 #### Server hooks for plugin ports: Moving players and vehicles
 
@@ -2944,21 +3265,21 @@ console (which waits for the next tick and does nothing inside a player's hook).
   when the hook heard a packet). Into another level it happens when the tick's level teleports run, as a command's.
   True when done or queued; false for a player not on the server or dead (where that can be seen), another dimension
   than the three, a position outside `/tp`'s bounds, an angle that is not finite, and on a client. Server-side.
-  Bundles need `"hooks": @API:teleport_player@`.
+  Bundles need `"hooks": 509`.
 - Helper **`native_teleport_vehicle(dimension, id, pos)`** (`host.teleport_vehicle`): teleports the boat, minecart or
   mob a rider sits on (a horse, a pig) with entity id `id`, of the level in place, to `pos` with its riders, as `/tp`
   does a vehicle (Bukkit's `Vehicle.teleport`): they stay seated and move by the same offset, and a server player riding
   it is told, as their client drives the vehicle itself. Only where nobody's state is swapped in (a tick hook); inside
   `native_vehicle_moved_v2` change `to` instead. False inside a player's hook, for no such vehicle here, another
   dimension, a position outside `/tp`'s bounds, and on a client. Server-side. Bundles need
-  `"hooks": @API:teleport_vehicle@`.
+  `"hooks": 510`.
 - **`native_vehicle_moved_v2(player, dimension, vehicle, kind, from, to, cancel)`**: an additive version of
   `native_vehicle_moved`, heard right after v1 at the same times and with the same state swapped in, and also for a mob
   a server player rides (a horse, a pig, a strider), which v1 does not hear. `vehicle` is the entity id and `dimension`
   its level. Set `cancel` and the vehicle is put back at `from` with its riders; change `to` and it is put there instead
   (not checked against the blocks; a value that is not finite is ignored), as Bukkit's `VehicleMoveEvent` with
   `Vehicle.teleport`. Either way its riders' clients are told, and the next move is heard from there. Mods are asked in
-  order and share `to` and `cancel`. Server-side. Bundles need `"hooks": @API:vehicle_moved_v2@`.
+  order and share `to` and `cancel`. Server-side. Bundles need `"hooks": 512`.
 - Helpers **`native_mount(entity, vehicle)`**, **`native_dismount(entity)`** and **`native_eject_passengers(vehicle)`**
   (`host.mount`, `host.dismount`, `host.eject_passengers`), by entity id in the level in place: seat a server player or
   a mob on a boat, minecart or mob, as `/ride <entity> mount <vehicle>` does with its checks (neither rides already, no
@@ -2966,20 +3287,20 @@ console (which waits for the next tick and does nothing inside a player's hook).
   beside the vehicle; or take every server player and mob off a vehicle (Bukkit's `addPassenger`, `leaveVehicle`,
   `eject`). `native_entity_mount` may refuse each. Inside a player's hook only the acting player and mobs are reached.
   True when it rides, got off, or one got off; false otherwise and on a client. Server-side. Bundles need
-  `"hooks": @API:mount@`.
+  `"hooks": 470`.
 - Helper **`native_set_flight(uuid, allow, flying)`** (`host.set_flight`): lets a server player fly in any game mode
   (`allow`) or not, and sets whether they fly now (`flying`), as Bukkit's `Player.setAllowFlight` and `setFlying`
   (`Abilities.mayfly` and `flying`); their client is told, and the server's flying check no longer kicks them. A player
   who may not fly does not fly; creative and spectator players fly whatever `allow` is. Kept until their game mode
   changes, they respawn or they leave (vanilla sets it for the mode then); not saved. Done at once where nobody's state
   is swapped in, else after the players' packets of the server tick. True when done or queued; false for a player not
-  on the server (where that can be seen) and on a client. Server-side. Bundles need `"hooks": @API:set_flight@`.
+  on the server (where that can be seen) and on a client. Server-side. Bundles need `"hooks": 505`.
 - Helper **`native_respawn_player(uuid)`** (`host.respawn_player`): respawns a dead server player as their client's
   Respawn click does (`ClientCommand` `PERFORM_RESPAWN`; Spigot's `player.spigot().respawn()`): at their bed, anchor or
   the world spawn, with the respawn hooks, without waiting for the click. Done after the players' packets of the server
   tick (the same tick from a packet's hook or the tick's start, else the next). True when queued; false for a player
   seen not on the server or alive (inside another player's hook nobody else can be seen: it is queued and does nothing
-  for a living player), and on a client. Server-side. Bundles need `"hooks": @API:respawn_player@`.
+  for a living player), and on a client. Server-side. Bundles need `"hooks": 498`.
 
 #### Server hooks for plugin ports: Reading players
 
@@ -2994,12 +3315,12 @@ None.
   `sneaking`, `eye_height` in the current pose (1.62 standing, 1.27 crouching), `selected_slot`, and the `nickname`
   and `hidden` level server mods set (Bukkit's `getPing`, `isOnGround`, `getAllowFlight`, `isFlying`,
   `isSneaking`, `getEyeHeight`, `getDisplayName`). For the acting player, `latency`, `nickname`, `hidden` and
-  `address` read 0 or None while the hub is out of reach. Bundles need `"hooks": @API:server_player_state@`.
+  `address` read 0 or None while the hub is out of reach. Bundles need `"hooks": 504`.
 - Helper **`native_player_client(uuid) -> Option<NativeClientInfo>`** (`host.player_client`): the client's brand,
   language, the view distance it asks for, chat visibility, main hand and particle setting, the chunks the server
   sent it and its wire bytes in and out (Paper's `getClientBrandName`, `locale`, `getClientViewDistance`). It
   reads the hub, so it is None inside a player's hook while the hub is out of reach, the acting player's too.
-  Bundles need `"hooks": @API:player_client@`.
+  Bundles need `"hooks": 473`.
 - Helpers **`native_player_stats(uuid)`**, **`native_player_stat(uuid, stat_type, key)`** and
   **`native_set_player_stats(uuid, stats)`** (`host.player_stats`, ...): the player's statistics as vanilla's
   `players/stats/<uuid>.json` holds them (`{"stats": {"minecraft:custom": {"minecraft:jump": 3}}, "DataVersion":
@@ -3010,15 +3331,15 @@ None.
   for `players/advancements/<uuid>.json` (each advancement's criteria with their dates, and `done`); advancements
   this server lacks are dropped as when the file loads, and the client gets every advancement's progress again
   with the player's next tick (one newly done shows its toast, as a grant would, with no rewards). The setters say whether the player was found. Bundles need
-  `"hooks": @API:player_records@`.
+  `"hooks": 487`.
 - Helpers **`native_max_players()`** (`max-players`, as `/list` shows it; None while the hub is out of reach),
   **`native_server_dir()`** (a dedicated server's folder, absolute; None elsewhere) and **`native_log_file()`** (the
   `logs/latest.log` this run writes, absolute; None when it logs to the terminal only), as Bukkit's
-  `Server.getMaxPlayers` and a plugin's server folder. Bundles need `"hooks": @API:server_files@`.
+  `Server.getMaxPlayers` and a plugin's server folder. Bundles need `"hooks": 503`.
 - Helpers **`native_held_stack(uuid)`** and **`native_player_equipment(uuid, slot)`** (`host.held_stack`,
   `host.player_equipment`): the whole stack, components included, in a player's main hand or `EquipmentSlot`, from
   any server hook and for any player, not only the acting one (Bukkit's `getEquipment().getItemInMainHand()` and
-  `getItem(slot)`). None for an empty slot and for `Body` and `Saddle`. Bundles need `"hooks": @API:player_equipment@`.
+  `getItem(slot)`). None for an empty slot and for `Body` and `Saddle`. Bundles need `"hooks": 478`.
 
 #### Server hooks for plugin ports: per-player feedback
 
@@ -3035,7 +3356,7 @@ per-player helpers for these (a NeoForge mod sends `ServerPlayer.connection.send
   it). No range applies: their client fades it with distance as any sound. It leaves at the tick's end, so it works
   from any server hook, a player's own included; true means queued. False on a client, for a bad name, category,
   position, volume or pitch, and for a player who isn't on (inside another player's hook, where the players are out of
-  reach, that player then gets nothing). Bundles need `"hooks": @API:play_sound_to@`.
+  reach, that player then gets nothing). Bundles need `"hooks": 538`.
 - Helper **`native_send_particles_to(uuid, options, state, at, spread, speed, count, force)`**
   (`host.send_particles_to`): particles for that player alone, as vanilla's `ServerLevel.sendParticles(player, ...)`
   (`/particle ... normal|force <player>`) and Bukkit's `Player.spawnParticle`: sent when `at` is within 32 blocks of
@@ -3043,13 +3364,13 @@ per-player helpers for these (a NeoForge mod sends `ServerPlayer.connection.send
   whatever its Particles option says). Options and their checks are `GameLevel::native_send_particles`'s: block
   particles need `state`, item, trail and vibration particles aren't sent, a mod's own type
   (`ParticleOptions::named`) reaches only a Horizon client. Queued as `native_play_sound_to`, with the same answers.
-  Bundles need `"hooks": @API:send_particles_to@`.
+  Bundles need `"hooks": 545`.
 - Helper **`native_title(uuid, title, subtitle, fade_in, stay, fade_out)`** (`host.title`): a title and subtitle in
   the middle of that player's screen, as `/title` and Adventure's `showTitle`: the times (in ticks; vanilla's default
   is 10, 70, 20), the subtitle and the title, in that order, replacing a title shown before; an empty subtitle shows
   none. Sent at once, as `native_tell`: also inside a player's hook for the acting player, whose packets go after the
   hook. False on a client, for a negative time, and for a player who isn't on or can't be reached from here (another
-  player inside a player's hook). Bundles need `"hooks": @API:title@`.
+  player inside a player's hook). Bundles need `"hooks": 553`.
 - Helper **`native_boss_bar(uuid, id, bar)`** (`host.boss_bar`): shows that player the boss bar `id` (a UUID the mod
   picks; a random one keeps clear of the world's) as a `NativeBossBar` (`name`, `progress` 0 to 1, `color` and
   `overlay` as `BossBarColor` and `BossBarOverlay` ordinals, the `darken`, `music` and `fog` flags), changes it, or
@@ -3057,7 +3378,7 @@ per-player helpers for these (a NeoForge mod sends `ServerPlayer.connection.send
   world's bars (`ServerBossEvent`'s packets: a change is one packet, a new bar is added under the mod's earlier ones,
   after the `/bossbar` bars and before a boss's). By UUID: kept for a player who is off, who sees it again when they
   come back, until a mod takes it away or the server stops. Works from any server hook. False on a client, and for a
-  progress outside 0 to 1 or a colour or overlay `BossEvent` hasn't. Bundles need `"hooks": @API:boss_bar@`.
+  progress outside 0 to 1 or a colour or overlay `BossEvent` hasn't. Bundles need `"hooks": 515`.
 - Helper **`native_set_compass_target(uuid, target)`** (`host.set_compass_target`): points that player's compass at
   `Some((dimension, pos))`, or at the world spawn again with None, as Bukkit's `Player.setCompassTarget`. The
   `ClientboundSetDefaultSpawnPositionPacket` they are sent carries the target in place of the world spawn, now and
@@ -3066,7 +3387,7 @@ per-player helpers for these (a NeoForge mod sends `ServerPlayer.connection.send
   keeps only an Overworld target, `remote.rs`); a lodestone
   compass and a recovery compass keep their own targets. Queued as `native_play_sound_to`, with the same answers; also
   false for a dimension that isn't a namespaced id or a position a block position can't carry. Bundles need
-  `"hooks": @API:compass_target@`.
+  `"hooks": 518`.
 
 #### Server hooks for plugin ports: packets
 
@@ -3082,7 +3403,7 @@ What packet-level plugins (ProtocolLib, PacketEvents, TAB), plugin channel liste
   packet costs one atomic load. Not heard: the configuration phase, the disconnect a kick sends, bytes that don't decode
   (they go out unchanged, as does every packet no mod changed), and a player who isn't a guest (single player's own). It
   runs where the packet is sent, on whichever server thread sends it, with no `self` and no player's state swapped in, once for
-  each packet and player: keep it cheap. Bundles need `"hooks": @API:server_packet@`.
+  each packet and player: keep it cheap. Bundles need `"hooks": 546`.
 - **`native_entity_data_to(viewer, entity, values)`**: the typed shortcut for one packet, the entity data
   (`ClientboundSetEntityDataPacket`) the server is about to send the guest `viewer` for the entity with network id
   `entity`. `values` are its `(index, serializer id, value)` entries (`EntityDataValue`, `SynchedEntityData.DataValue`)
@@ -3092,7 +3413,7 @@ What packet-level plugins (ProtocolLib, PacketEvents, TAB), plugin channel liste
   **`native_watch_entity_data()`**, which decodes this packet alone (the other packets keep going out undecoded).
   Every entity's data reaches a client in this packet, a newly tracked one's first values included; an entity whose
   values are all defaults is tracked without one, as in vanilla, so there is nothing to change until a value does.
-  The same threads and limits as `native_server_packet`. Bundles need `"hooks": @API:entity_data_to@`.
+  The same threads and limits as `native_server_packet`. Bundles need `"hooks": 519`.
 - **`native_player_register_channels(player, name, channels, register)`**: a guest's client registered plugin channels
   (`minecraft:register`, `register` true) or unregistered them (`minecraft:unregister`), NUL-separated names as Bukkit's
   and Fabric's clients and proxies send them; vanilla reads neither message (Bukkit's `PlayerRegisterChannelEvent` and
@@ -3103,7 +3424,7 @@ What packet-level plugins (ProtocolLib, PacketEvents, TAB), plugin channel liste
   keeps at most 128 names of at most 256 bytes, printable ASCII with a `:`; a name past that, or one that changes
   nothing, is not heard. The helper **`native_player_channels(player)`** lists the channels a player has, in the order
   registered (Bukkit's `Player.getListeningPluginChannels`); it reads the hub, so it is empty inside a player's own
-  hook. Bundles need `"hooks": @API:player_channels@`.
+  hook. Bundles need `"hooks": 539`.
 - Helpers **`native_send_resource_pack(player, id, url, sha1, prompt, required)`** and
   **`native_pop_resource_pack(player, id)`**: a mod's own resource packs for one player's client, as Bukkit's
   `Player.addResourcePack` and `removeResourcePack(s)`. The push (`ClientboundResourcePackPushPacket`) carries the
@@ -3114,7 +3435,7 @@ What packet-level plugins (ProtocolLib, PacketEvents, TAB), plugin channel liste
   required, whatever pack they declined; anything else is the mod's to decide. `native_pop_resource_pack(player, None)`
   takes away every server pack the client has. Both send as `native_send` does (from `native_server_tick` and from the
   player's own hooks) and are false when the player isn't on, on a client, and for an empty URL, a URL past 32767
-  characters or a hash past 40. Bundles need `"hooks": @API:resource_packs@`.
+  characters or a hash past 40. Bundles need `"hooks": 543`.
 - **`native_resource_pack_status_v2(player, name, pack, status)`**: an additive version of
   `native_resource_pack_status` with the answered pack's id (`ServerboundResourcePackPacket.id`, Bukkit's
   `PlayerResourcePackStatusEvent.getID`), so a mod hears its own pack's answers apart from every other pack's;
@@ -3122,13 +3443,13 @@ What packet-level plugins (ProtocolLib, PacketEvents, TAB), plugin channel liste
   answers to the server's own pack (`resource-pack` in `server.properties`), given during the configuration and never
   heard by v1, are heard here in order once the player has logged in, right after `native_player_logged_in`, with the
   hub in place; a player disconnected for declining a required pack never logs in. v1 keeps its signature and firing
-  point. It only hears. Bundles need `"hooks": @API:resource_pack_status_v2@`.
+  point. It only hears. Bundles need `"hooks": 542`.
 - Helper **`native_kick(player, reason)`**: disconnects a player with `reason`, a whole `Text` in its colours and
   translations (Adventure's `Player.kick(Component)`; `/kick` takes one line of plain text), as `/kick` does: the
   client shows it, the log's "lost connection" line names it and `native_player_kicked` hears it. The kick happens at
   the tick's end, with the mod messages, so it works from any server hook, the kicked player's own included. True when
   it is queued; false on a client, in a world nobody else can join, and for a player who isn't on when the hub can tell
-  (a player gone by the tick's end isn't kicked either). Bundles need `"hooks": @API:kick@`.
+  (a player gone by the tick's end isn't kicked either). Bundles need `"hooks": 526`.
 
 #### Server hooks for plugin ports: vanish and per-viewer visuals
 
@@ -3143,7 +3464,7 @@ injections before.
   its tick did to the new one (a melee hit, a sting, a sonic boom) is not dealt; it may pick the same target on a
   later tick, which is heard again, so a vanish mod cancels every time the target is a vanished player. A target that
   is neither a player nor a mob is not heard. No `self` (the mobs are out of the game while they tick), so a mod
-  decides from its own state. Server-side. Bundles need `"hooks": @API:living_change_target@`.
+  decides from its own state. Server-side. Bundles need `"hooks": 528`.
 - Helper **`native_hide_entity_from(viewer, entity, hidden)`** (`host.hide_entity_from`): hides the entity with
   network id `entity` (a mob, a display, another player's `NativeServerPlayer.entity_id`) from the player `viewer`
   alone, or shows it again, as Bukkit's `Player.hideEntity`/`showEntity` (`hidePlayer` for a player). From the next
@@ -3152,7 +3473,7 @@ injections before.
   it; `native_hide_player` stays the way to hide a player from permission levels. Kept while the viewer is on, for that
   id: forgotten when they leave, and a player who rejoins has another id (hide them again from
   `native_player_logged_in`). Outside a player's hook; false there, when the viewer isn't on and for their own entity.
-  Bundles need `"hooks": @API:hide_entity_from@`.
+  Bundles need `"hooks": 521`.
 - Helpers **`native_client_entity_spawn(viewer, kind, pos, yaw, nbt)`**, **`native_client_entity_set(viewer, id, nbt)`**,
   **`native_client_entity_move(viewer, id, pos, yaw)`**, **`native_client_entity_remove(viewer, ids)`** and
   **`native_reserve_entity_id()`** (`host.client_entity_spawn`...): an entity shown to one player's client alone, a
@@ -3166,21 +3487,21 @@ injections before.
   it shows); `move` teleports it (a display eases over its `teleport_duration`); `remove` takes away those of `ids` that
   are this viewer's client-side entities and leaves other ids alone. `native_reserve_entity_id()` is an id from the
   server's own counter for a mod's own packets. Outside a player's hook; None or false there, when the viewer isn't on,
-  for an unknown type and for an id that isn't theirs. Bundles need `"hooks": @API:client_entities@`.
+  for an unknown type and for an id that isn't theirs. Bundles need `"hooks": 517`.
 - Helper **`native_set_list_name(uuid, name)`** (`host.set_list_name`): styled text (colours, a rank prefix) for that
   player in everyone's Tab list in place of their nickname or name, as Bukkit's `Player.setPlayerListName`; None shows
   the nickname or name again. Only the Tab list (chat keeps `native_set_display_name`'s or the nickname). It is sent at
   once and with every entry the lists get of them later (they join, a vanish ends, `native_hide_entity_from` shows them
   again), and kept by UUID until a mod sets it again or the server stops, also if they leave and come back, so a Tab
   plugin needs no per-tick diff. Outside a player's hook; false there and when they aren't on. Bundles need
-  `"hooks": @API:set_list_name@`.
+  `"hooks": 550`.
 - Helper **`native_set_display_name(uuid, name)`** (`host.set_display_name`): styled text for that player in chat in
   place of their nickname or name, as Bukkit's `Player.setDisplayName`: their chat messages, `/me`, `/msg` both ways
   and the lines that they joined or left; None shows the nickname or name again. Their team's prefix, suffix and colour
   still go around it; hovering it gives the real name, which `/tell` is suggested with and which stays in the log,
   commands and selectors. The Tab list keeps `native_set_list_name`'s or the nickname. Kept by UUID until a mod sets
   it again or the server stops. Outside a player's hook; false there and when they aren't on. Bundles need
-  `"hooks": @API:set_display_name@`.
+  `"hooks": 549`.
 - Helper **`native_set_name_tag(uuid, tag)`** (`host.set_name_tag`): a plain name over that player's head for everyone
   else in place of theirs, a nickname above the head; None shows their name again. A client puts a player's profile
   name there, so the tag is the profile name of their list entries: 1 to 16 ASCII letters, digits or symbols, no
@@ -3188,7 +3509,7 @@ injections before.
   clients get their entry and entity again at once (a blink), and their Tab list shows the tag unless a list name or
   nickname covers it; their own client reads it from their next join. Chat, commands, selectors, the log and the
   server's events keep the real name. Kept by UUID until a mod sets it again or the server stops. Outside a player's
-  hook; false there, when they aren't on and for a tag that isn't one. Bundles need `"hooks": @API:set_name_tag@`.
+  hook; false there, when they aren't on and for a tag that isn't one. Bundles need `"hooks": 551`.
 
 #### Server hooks for plugin ports: NPCs
 
@@ -3202,7 +3523,7 @@ that tick the other mobs of that level read as gone.
 
 - **`native_spawn_mob(dimension, kind, pos, &NativeSpawn)`** and **`native_summon(dimension, kind, pos, nbt)`**
   ([Mobs](#mobs), [Entities](#entities)) spawn into any loaded level, as `execute in <dimension> run summon` does,
-  where they were refused for any level but the one in place. Their other refusals stay. API @API:npc_any_level@.
+  where they were refused for any level but the one in place. Their other refusals stay. API 533.
 - **`native_entity_by_uuid(uuid)`** finds the entity with that UUID in any loaded level, as Bukkit's
   `Server.getEntity(UUID)` does: `(dimension, id, kind)`, so a stage plugin that keeps its actors by UUID reaches them
   wherever they are, without `/tp`, `/data` or `/kill` by UUID on the console. A server's player is found too
@@ -3210,14 +3531,14 @@ that tick the other mobs of that level read as gone.
   **`native_merge_entity_nbt(dimension, id, nbt)`** is `native_entity_merge_nbt` ([Entity and level
   handles](#entity-and-level-handles)) for any loaded level, as `execute in <dimension> run data merge entity` does,
   with the same refusals (a player, a kind Horizon can't reload yet, data that changes nothing). API
-  @API:npc_entity_by_uuid@.
+  534.
 - **`native_set_entity_rotation(dimension, id, yaw, pitch, head_yaw)`** turns an entity without moving it, as
   `/rotate` does (`Entity.forceSetRotation`): its yaw and pitch in degrees (pitch clamped to -90..90), with its body and
   head; `Some(head_yaw)` then turns a mob's head alone (`setYHeadRot`), so an NPC looks over its shoulder. It takes
   mobs (mannequins too), armor stands, boats, minecarts, evoker fangs, and displays and the other entities Horizon
   keeps without simulating them; a player is turned by teleporting them. A mob whose AI runs turns back by its own
   look and body control on its next tick: for one that looks around, use `native_mob_look_at` each tick, or spawn it
-  with `no_ai`. False for no such entity, another kind, or an angle that isn't finite. API @API:npc_entity_rotation@.
+  with `no_ai`. False for no such entity, another kind, or an angle that isn't finite. API 535.
 - **`native_mob_navigate(dimension, mob, to, reach, speed)`** walks a mob with the engine's pathfinding, as
   `PathNavigation.moveTo(x, y, z, reach, speed)` does: round walls and through doors as its own navigation allows (a
   walker's target is the ground below `to`), done within `reach` blocks, at `speed` times its movement speed. True
@@ -3230,7 +3551,7 @@ that tick the other mobs of that level read as gone.
   as vanilla's goals do, so its own goals may take the navigation or the look over on a later tick: an NPC library
   asks again each tick, or gives its mobs goals of their own (`native_register_goals`). A mob with `no_ai` keeps a path
   but doesn't walk it, and doesn't turn its head (`native_set_entity_rotation` turns it). False for no such living mob
-  or a value that isn't finite. API @API:npc_mob_navigation@.
+  or a value that isn't finite. API 537.
 - **`native_mob_attack(dimension, mob, target)`** has a mob strike an entity with its own attack, as
   `Mob.doHurtTarget` does: its attack damage, held weapon and enchantments, knockback, the species' extras (a cave
   spider's poison, a husk's hunger) and its attack sound, dealt as any mob's hit is, so the damage hooks hear it.
@@ -3238,7 +3559,7 @@ that tick the other mobs of that level read as gone.
   sees them strikes in its tick, whichever player the mob sees. There is no reach or sight check and no swing, as in
   vanilla, where the attack goal checks and swings first. True when the blow was dealt (whether it hurt, a shield or
   creative mode aside, is the damage hooks' to tell); false for no such living mob or target, the mob itself, and a
-  player while a guest's packet is handled, where the hub is taken out. API @API:npc_mob_attack@.
+  player while a guest's packet is handled, where the hub is taken out. API 536.
 
 #### Server hooks for plugin ports: damage, hands, fishing and redstone
 
@@ -3254,26 +3575,26 @@ arrow). Each is none when Horizon does not know it, and an attacker that is the 
 v1: the victim is borrowed out of the game during the hit, so the entity helpers can't be called here; a mod keeps
 what it needs and acts in its next tick hook. Bukkit's damage modifier breakdown (armour, blocking, resistance,
 absorption as separate values) is not offered: the reductions are applied after this hook. Bundles need "hooks":
-@API:living_incoming_damage_v3@.
+529.
 
 `native_interact_entity_v2(entity, kind, hand, stack, cancel)` is `native_interact_entity` with the hand that clicks
 (`Hand::Main` or `Hand::Off`, NeoForge's `PlayerInteractEvent.EntityInteract.getHand`). It is asked right after the
 unchanged v1 hook, once per hand vanilla tries: the main hand first, the off hand only when the main hand's turn did
 nothing. Setting `cancel` claims the click, as v1's `claimed` does. A mod that claims the main hand's click hears one
 event per click, as Bukkit's `PlayerInteractEntityEvent` for `EquipmentSlot.HAND`. A click v1 claimed is not asked
-again. Bundles need "hooks": @API:interact_entity_v2@.
+again. Bundles need "hooks": 523.
 
 `native_right_click_block_v2(pos, face, hand, cancel)` is `native_right_click_block` with the hand that clicks
 (NeoForge's `PlayerInteractEvent.RightClickBlock.getHand`), asked right after the unchanged v1 hook, once per hand
 tried. A canceled click does what a v1 cancel does (neither the block nor the item acts, the hand doesn't swing, the
 other hand gets no turn); a click v1 canceled is not asked again. A protection mod refuses an off-hand flint and steel
-or bone meal by its hand. Bundles need "hooks": @API:right_click_block_v2@.
+or bone meal by its hand. Bundles need "hooks": 544.
 
 `native_player_fish_v2(player, name, state, hand, cancel)` is `native_player_fish` with the rod's hand: the cast and the
 reel-ins (states 0 and 2 to 4) name the hand the rod is used with, as Bukkit's `PlayerFishEvent.getHand`; a bite
 (state 1) names the hand holding the rod, the main hand first. It is asked right after v1 with the same `cancel`; one
 v1 set is not asked again. A stasis or power rod in the off hand is seen, and read from that hand's stack. Bundles
-need "hooks": @API:player_fish_v2@.
+need "hooks": 540.
 
 `native_fishing_hook_landed(player, hook, dimension, block, face)` hears a server player's fishing bobber (`hook`, its
 entity id) touching a block, as Bukkit's `ProjectileHitEvent` for a `FishHook`: once each tick the flying bobber meets
@@ -3282,14 +3603,14 @@ ends: the block under its centre, `face` `[0, 1, 0]`). It is heard at the end of
 place, so a mod that powers the button or plate it rests on can also take it away with `native_remove_entity`. A
 bobber in water, one hooked to an entity and a LAN host's own bobber are not heard. It only hears: the bobber moves as
 it would. The player's state is swapped in, the other players are out of reach. Bundles need "hooks":
-@API:fishing_hook_landed@.
+520.
 
 `native_remove_entity(dimension, id)` also removes projectiles (arrows, tridents, snowballs, eggs, ender pearls,
 fireballs, wind charges, llama spit, shulker bullets, firework rockets) as `/kill` does, and a server player's fishing
 bobber, as `Entity.discard` (Bukkit's `Entity.remove`): an arrow cleanup, or a power rod's bobber taken once its
 button is held. A bobber can be removed for the player in place (inside their hooks, `native_fishing_hook_landed`
 included), and outside a guest's turn for any player of the level; it ends as a bobber that goes by itself, and the
-rod takes no wear. False for another dimension or no such entity. Bundles need "hooks": @API:remove_projectiles@.
+rod takes no wear. False for another dimension or no such entity. Bundles need "hooks": 541.
 
 `native_block_redstone(dimension, pos, old, new)` (a `GameLevel` hook) is asked when a button, lever or pressure plate
 is about to change its signal from `old` to `new`, 0 to 15, as Bukkit's `BlockRedstoneEvent`: a button pressed by a
@@ -3298,7 +3619,7 @@ component takes that signal (clamped to 0 to 15; an on-or-off component is on fo
 `old` keeps it as it is, without a sound: a held button's release is scheduled again and asked again, a plate held on
 is checked again, a lever stays. A mod holds a power rod's button or plate on with no 1-tick gap. Not heard yet:
 redstone wire, torches, repeaters, comparators, observers, detector rails, tripwire hooks, daylight detectors and the
-other sources. Server-side. Bundles need "hooks": @API:block_redstone@.
+other sources. Server-side. Bundles need "hooks": 514.
 
 `native_hurt_entity(dimension, target, amount, damage_type, attacker)` hurts a mob or a player of the level `dimension`
 by `amount` of `damage_type` (`minecraft:mob_attack`), from `attacker` (a mob's or a player's entity id, the causing
@@ -3307,7 +3628,7 @@ and direct entity, as vanilla's `damageSources().mobAttack(attacker)`; none for 
 the attacker, death and its message, and the damage hooks hear it. It returns whether the target was hurt: false for
 an invulnerable, dead or creative target, another dimension, an entity that is not a mob or a player, an attacker that
 isn't there, or an amount that is not a finite number. An NPC's own hit needs no `damage` command and no UUID lookup.
-Bundles need "hooks": @API:hurt_entity@.
+Bundles need "hooks": 522.
 
 
 #### Server hooks for plugin ports: Menus, items and maps
@@ -3318,7 +3639,7 @@ Bundles need "hooks": @API:hurt_entity@.
   one compound (whitespace around it aside), for air, and for an item the world does not have. `ItemStack::from_nbt`
   reads a stack from a compound without asking the registry, and `mod_api::parse_snbt` is the SNBT reader itself (the
   tag and the bytes it read), so a mod that keeps items as text needs neither the game's internal `item_data` module
-  nor a `summon` command to make them. Bundles need `"hooks": @API:item_from_snbt@`.
+  nor a `summon` command to make them. Bundles need `"hooks": 525`.
 - Helpers `native_new_map(dimension, colors) -> Option<i32>` and `native_paint_map(map_id, colors) -> bool`: maps a
   server mod draws that the world keeps (Bukkit's `Server.createMap` and a `MapCanvas` drawn for everyone). `colors`
   is the 128 x 128 picture, row by row, each byte a `MapColor` id times 4 plus its shade, as `native_send_map` takes.
@@ -3328,7 +3649,7 @@ Bundles need "hooks": @API:hurt_entity@.
   map the world made or saved (false otherwise); an unlocked map is still drawn over where its holders explore. Both
   are saved with the world's maps (`data/minecraft/maps/<id>.dat`) and sent like vanilla map data to whoever carries
   the map or sees it framed, players who join later included, so the mod never resends them. None and false on a
-  client of a server. Bundles need `"hooks": @API:new_map@`.
+  client of a server. Bundles need `"hooks": 532`.
 - Helper `native_open_menu_with_input(uuid, rows, title, items, input) -> Option<i32>`: a server menu (see "Server
   menus") whose slots in the range `input` hold items as a chest's do (Bukkit's custom inventory with storage slots):
   the player puts stacks in and takes them out by vanilla's click rules (pickup, split, shift-click from their
@@ -3344,7 +3665,7 @@ Bundles need "hooks": @API:hurt_entity@.
   vanilla's `AbstractContainerMenu.clearContainer` gives a crafting grid back (into the inventory, the rest dropped;
   all dropped at them when they left), so no item is lost or made. It runs where the menu closed, so the hub may be
   out of the game's hands and a player's state swapped in: answer through `slots`. Bundles need
-  `"hooks": @API:menu_input@`.
+  `"hooks": 531`.
 - Helper `native_open_inventory_menu(viewer, rows, title, (target, kind), layout) -> Option<i32>`: another player's
   inventory (`Player`, 41 slots in `native_inventory`'s numbering) or ender chest (`Ender`, 27) in a server menu, for
   an operator's `/invsee` (Bukkit's `openInventory(target.getInventory())`). Menu slot `k` shows the target's slot
@@ -3357,7 +3678,7 @@ Bundles need "hooks": @API:hurt_entity@.
   that changes it (a click whose write fails is taken back whole). The menu closes once the target leaves, dies or,
   away, comes back. None for a viewer not here, the target being the viewer, logging in, dead or never seen here, a
   layout longer than the rows' slots, a slot past the inventory or shown twice, and inside a player's turn. A mixin
-  helper, not on `Host` (it takes `NativeInventoryKind`). Bundles need `"hooks": @API:inventory_menu@`.
+  helper, not on `Host` (it takes `NativeInventoryKind`). Bundles need `"hooks": 524`.
 
 #### Server hooks for plugin ports: world generation
 
@@ -3366,7 +3687,7 @@ biomes) in some chunks or all of them, as Bukkit's `ChunkGenerator` does.
 
 - **`native_world_seed()`** (`native_world_seed.rs`): the world's seed as `/seed` prints it (`WorldOptions.seed`,
   Bukkit's `World.getSeed`), the one every level generates from, for a preview that draws the terrain a chunk will get.
-  None off a server: a client only knows a hash of its server's seed. API @API:world_seed@.
+  None off a server: a client only knows a hash of its server's seed. API 554.
 - **`native_chunk_generate(dimension, chunk, seed, flat, chunk_out, generate)`**
   (`horizon_world::worldgen::native_generate`): chunk `[x, z]` of the level `dimension` is about to get its terrain,
   after its biomes and structure starts and before the noise (Bukkit's `ChunkGenerator.generateNoise`, vanilla's
@@ -3380,7 +3701,7 @@ biomes) in some chunks or all of them, as Bukkit's `ChunkGenerator` does.
   with either answer. Mods are asked in turn. It runs on the generation workers, for several chunks at once on several
   threads and never on the server thread, so no `Game` helper works there; a chunk can be asked again (a proto chunk
   saved unfinished, the neighbours of a finished one, the far terrain's decoration), so answer the same each time. Also
-  where single player and the far terrain generate. API @API:chunk_generate@.
+  where single player and the far terrain generate. API 516.
 - **`native_lod_column(dimension, column, seed, flat, column_out)`** (`horizon_world::worldgen::native_generate`): the
   far terrain samples block column `[x, z]` where no chunk is generated yet, from vanilla's noise and surface rule
   (`GeneratorWorker::lod_grid`, `surface_sample`). A mod whose `native_chunk_generate` builds that chunk calls
@@ -3388,7 +3709,7 @@ biomes) in some chunks or all of them, as Bukkit's `ChunkGenerator` does.
   the biome its top shows (None keeps vanilla's): the far terrain then draws them, its top, the water right over it and
   the spans a cliff shows, until the chunk itself is generated. Left alone, the column is vanilla's. It is asked for each
   far column, many per tile, on the far terrain's workers, several at once: answer from the terrain function alone,
-  without building the chunk. Like vanilla's, a far column shows no carver's caves. API @API:lod_column@.
+  without building the chunk. Like vanilla's, a far column shows no carver's caves. API 530.
 
 #### Server hooks for plugin ports: diagnostics
 
@@ -3400,7 +3721,7 @@ while no mod asks for it.
   yet; sort a copy for percentiles, `native_tick_stats` has the average), and the ticks a second over the last one,
   five and fifteen minutes (Bukkit's `Server.getTPS`), measured between the ends of the recorded ticks and averaged
   once a second as a load average is. They start at 20; an idle server reads 20, a sprint more and a server that
-  falls behind less. Bundles need `"hooks": @API:tick_times@`.
+  falls behind less. Bundles need `"hooks": 552`.
 - **`native_level_stats(dimension)`**, **`native_level_entities(dimension)`** and
   **`native_level_block_entities(dimension)`**: what an open level of a server holds (`minecraft:the_nether`; None or
   empty on a client and for a level that isn't open), as Bukkit's `World.getLoadedChunks`, `getForceLoadedChunks`,
@@ -3411,7 +3732,7 @@ while no mod asks for it.
   entity type of its block (`minecraft:barrel`, `minecraft:mob_spawner`), else the block's name. A level not in place
   is swapped in for the count and back, as `/execute in` does. The players are the hub's, so none are counted inside
   a player's own hook, where the hub is taken out. Each walks every entity or block entity: call them once a second
-  or less, not every tick. Bundles need `"hooks": @API:level_stats@`.
+  or less, not every tick. Bundles need `"hooks": 527`.
 - **`native_server_packets(player, packets, outbound)`** and **`native_count_packets(on)`**: the play packets each
   player's connection carries, by type, as PacketEvents' send and receive events count them. Nothing is kept until a
   mod calls `native_count_packets(true)` (one switch for the server, shared by every mod; off drops what is kept, and
@@ -3419,7 +3740,7 @@ while no mod asks for it.
   last tick arrive, those sent (`outbound`) and those received, each as (packet id, body bytes) in order. The id is
   `horizon_protocol::ids::play`'s as the server sent or read it (before an older client's renumbering; keep-alives
   and the disconnect included), the bytes are id and payload before compression and encryption. A tick stalled for
-  long keeps at most 65536 packets each way. Bundles need `"hooks": @API:server_packets@`.
+  long keeps at most 65536 packets each way. Bundles need `"hooks": 547`.
 - **`native_server_tick_timed(wall_ms, cpu_ms, spans)`**, **`native_spans(on)`**, **`native_mob_cost_sampling(on)`**
   and **`native_take_mob_costs()`**: a profiler by tick step instead of by stack, as spark's. After each pass of the
   server tick (paused ones too) while its spans are recorded, the hook gets the pass's wall time, the server thread's
@@ -3431,7 +3752,7 @@ while no mod asks for it.
   by level and type until it is turned off, apart from `horizon-report`'s sampling, so both can run;
   `native_take_mob_costs()` takes the sums (`NativeMobCost`), costliest first. For a lighter profile, sample one tick
   in N: turn it on in `ServerTickStart` and off after. Call both from server hooks: the sampling belongs to the
-  server thread. Bundles need `"hooks": @API:server_tick_timed@`.
+  server thread. Bundles need `"hooks": 548`.
 
 - **`native_perform_command(player, command, ran)`**: a player typed a registered command (without its slash) and
   their level allows it, whether the world allows commands or not. The mod parses the line and sets `ran`. The
@@ -3559,7 +3880,7 @@ while no mod asks for it.
 
 Helpers for server mods whose bots are server players driven by the mod (a fake client that sends its own moves, as a
 PvP bot plugin's), in `crates/horizon-client/src/game/native_bots.rs`, on a server only. Nothing runs unless a mod
-calls them, and neither changes the player or the level. API @API:player_bots@.
+calls them, and neither changes the player or the level. API 452.
 
 - **`native_simulate_player_move(uuid, NativePlayerInput) -> Option<NativeSimulatedMove>`** plays one tick of the
   server player's own movement from a bot's keys, with the client movement code the server's movement prediction
@@ -3587,7 +3908,7 @@ client they do nothing, and the readers give nothing). Each takes the `dimension
 place; `native_server_tick` does not define one, so name the dimension and expect a refusal there.
 
 - `native_spawn_mob(dimension, kind, pos, &NativeSpawn)` spawns a mob and returns its id, in any loaded level since API
-  @API:npc_any_level@ ([NPCs](#server-hooks-for-plugin-ports-npcs)). `NativeSpawn` holds an optional name and health, and the
+  533 ([NPCs](#server-hooks-for-plugin-ports-npcs)). `NativeSpawn` holds an optional name and health, and the
   `no_ai`, `invisible`, `silent`, `invulnerable` and `no_gravity` flags; its default is a plain mob. The mob is finalized as a natural spawn
   is, and kept when its chunk unloads. Nothing is spawned outside `/summon`'s bounds, in a chunk that isn't loaded, or a monster on peaceful.
 - `native_mob(dimension, id)` and `native_mobs(dimension)` read the living mobs: id, dimension, kind, position, yaw, health and maximum health.
@@ -3700,7 +4021,7 @@ During a machine's own tick its block entity is out of the world, so these answe
 names the level it means by its `dimension` (`minecraft:overworld`), as `native_set_block` does.
 
 - `native_summon(dimension, kind, pos, nbt)` spawns an entity of `kind` from its compound, as `/summon <kind> <pos> <nbt>`
-  does (passengers included), and returns its id, in any loaded level since API @API:npc_any_level@
+  does (passengers included), and returns its id, in any loaded level since API 533
   ([NPCs](#server-hooks-for-plugin-ports-npcs)). None on a client, for a level not loaded, a position outside `/summon`'s
   bounds, a chunk that isn't loaded, a kind Horizon can't load, or one a mod kept out with `native_entity_join_level`.
 - `native_move_entity(dimension, id, pos, yaw, pitch)` moves an entity Horizon keeps without simulating it (a display, a
@@ -3709,7 +4030,7 @@ names the level it means by its `dimension` (`minecraft:overworld`), as `native_
   transformation (translation, left rotation, scale, right rotation; quaternions `[x, y, z, w]`), the ticks players see it
   ease over (`interpolation`) and its teleport duration (`teleport`, 0 to 59). Each call restarts the ease on clients.
 - `native_remove_entity(dimension, id)` removes such an entity as `/kill` does. Mobs go with `native_remove_mob`.
-  Since API @API:remove_projectiles@ it also removes projectiles and server players' fishing bobbers.
+  Since API 541 it also removes projectiles and server players' fishing bobbers.
 
 A model that moves (a turning gun barrel, a thrown projectile) is an `item_display` showing an item whose model comes from
 the mod's `.hmod` assets: summon it once, then move and pose it from a tick hook. Easing between ticks happens on each
@@ -3747,7 +4068,7 @@ a dimension.
   in vanilla), reads as `None`.
 - The entities are those of the level in place (the one a hook runs in) and the server's players, whatever their level.
 
-On a client (API @API:client_entity_refs@), `host.entity(id)` and these reads work against the entities the server shows
+On a client (API 426), `host.entity(id)` and these reads work against the entities the server shows
 the window: the window's own player (its id is the login's, once the server's first teleport made the player), other
 players, mobs, armor stands and the rest the server added. A handle belongs to one client level: after a login or a
 change of dimension (a respawn in the same level keeps it, as vanilla keeps its `ClientLevel`), the old one reads as
@@ -3769,7 +4090,7 @@ change of dimension (a respawn in the same level keeps it, as vanilla keeps its 
 An entity the client tracks without a list of its own (a display, an interaction, a marker, a leash knot) has a handle
 too, but reads only its `kind`, `uuid`, `level` and `position` (where the server last put it).
 
-`host.menu_stacks()` (client, API @API:client_entity_refs@) gives the stacks of the menu the server opened for the window,
+`host.menu_stacks()` (client, API 426) gives the stacks of the menu the server opened for the window,
 with their components, by the server's slot number (the numbers `ContainerSetSlot` and `ContainerClick` carry): a
 chest's own slots, then the player's inventory, then the hotbar; an empty slot is `None`. Where `NativeScreenView.slots`
 counts the slots, this lists them. It is `None` on a server, while no server-opened menu is up (the window's own
@@ -3791,7 +4112,7 @@ the server shows the window, so they work the same in single player, on a LAN an
   `NativeClientEntity` has the entity's `id` (the id `native_entity(id)` takes, for its custom name and the other
   handle reads), `position` and `previous_position`, `bounds`, `height`, `head_yaw`, `head_pitch`, `alive`,
   `invisible` (the flag or the effect), and for a player its `player_uuid` and `player_name`. From API
-  @API:client_entity_list@ it also has:
+  556 it also has:
 
   | Field | What it is |
   |---|---|
@@ -3803,10 +4124,10 @@ the server shows the window, so they work the same in single player, on a LAN an
 
   `entity.position_at(state.world_partial_tick)` (with `native_client_state()`) is where the frame draws it,
   `Entity.getPosition(partialTick)`.
-- `native_client_items()` (API @API:client_entity_list@) lists the dropped items the client shows, as
+- `native_client_items()` (API 556) lists the dropped items the client shows, as
   `NativeClientItem`: `id`, `stack`, `position`, `previous_position` and `position_at`. `native_item_entities` stays
   server-only.
-- `native_client_texture(name)` (API @API:client_entity_list@) gives a texture's pixels as `TexturePixels` by the name
+- `native_client_texture(name)` (API 556) gives a texture's pixels as `TexturePixels` by the name
   `texture` or `NativeClientProfile::skin` gives: a downloaded skin while the client holds it in memory (64x64), else
   `native_client_resources().texture(name)` ([Block states and resource files](#block-states-and-resource-files)), the
   resource packs' texture of that name. It decodes on each call, so cache the result by name, and clear the cache in
@@ -3856,7 +4177,7 @@ items are left out (NeoForge's `RenderLivingEvent.Pre`, cancelled); its name tag
   geometry hangs from the entity's frame, not from a model bone: place a hat from `head_yaw`, `pitch` and the entity type's
   eye height.
 - A model built in code, as a NeoForge mod's `createBodyLayer()` builds it, is an entity model layer (API
-  @API:model_layers@). `native_layer_definitions(layers)` (`EntityRenderersEvent.RegisterLayerDefinitions`, asked once at
+  434). `native_layer_definitions(layers)` (`EntityRenderersEvent.RegisterLayerDefinitions`, asked once at
   start) takes a mod's layers by id, `<mod id>:<model>#<layer>`. Each is a `LayerDefinition`: a `MeshDefinition` whose
   named parts hold `CubeListBuilder` boxes at a `PartPose`, on a texture of a given size. A box takes its faces from the
   texture as vanilla's do (`tex_offs`, `mirror`), and a `CubeDeformation` grows it over the same texels.
@@ -3968,7 +4289,7 @@ give it what Horizon's own rows use, without reading `Game`'s fields:
   (`minecraft:armor_toughness`, which vanilla doesn't draw), as `LivingEntity.getAttributeValue`. None with no player
   or for an id the player has no attribute for.
 
-Bundles need `"hooks": @API:health_hud_state@`.
+Bundles need `"hooks": 428`.
 
 ### What a client HUD reads
 
@@ -3996,7 +4317,7 @@ thread:
 - `native_data_dir(mod_id)` is the mod's own folder, `horizon-mods/.horizon-mod-data/<id>/` in the instance; the helper
   doesn't make it. Every world shares it: keep a world's files in a folder named from `world`.
 
-Bundles need `"hooks": @API:session_state@`.
+Bundles need `"hooks": 559`.
 
 ### Toasts a mod hides
 
@@ -4014,7 +4335,7 @@ Set `cancel` and the toast isn't queued, shown or sounded. As in vanilla, an upd
 is not an add: more recipes joining the recipe toast, or a system toast taking new text (`SystemToast.addOrUpdate`).
 A cancelled tutorial hint isn't asked again while it stays the current hint; a cancelled system toast is asked again at
 its next update. The startup menu's narrator toast is not told: it shows before the game's `Host` exists.
-Bundles need `"hooks": @API:toast_add@`.
+Bundles need `"hooks": 432`.
 
 ### The client's tick
 
@@ -4023,7 +4344,7 @@ they bracket each client tick of the window, the top and the end of vanilla's `M
 times a second on the title screen, while paused and in a world alike, so a mod checks for itself whether a world is
 shown (`native_clock()` is None on the title screen). A frame that falls behind runs the ticks it owes back to back,
 each one bracketed. A server never fires them, single player's own included (it ticks on its own thread): server work
-goes in `native_server_tick`. A tick that errors ends without its `post`. Bundles need `"hooks": @API:client_tick@`.
+goes in `native_server_tick`. A tick that errors ends without its `post`. Bundles need `"hooks": 439`.
 
 ### Values for a mod's shader pack
 
@@ -4061,11 +4382,11 @@ connection is up: `native_send_packet` reaches the server. The counterpart is `n
 NeoForge's `ClientPlayerNetworkEvent.LoggingOut`. It is told before a connection is discarded, after
 `native_client_level_unload`, and only when a connection ends: NeoForge's documentation says its event may also fire as
 a new integrated server is created, and Horizon's doesn't. A mod keeps its per-server state between the two: caches, a
-handshake with its server half, a welcome message. Bundles need `"hooks": @API:client_player_network_logging_in@`.
+handshake with its server half, a welcome message. Bundles need `"hooks": 440`.
 
 ### The local player's combat, on the client
 
-API @API:client_combat@, `crates/horizon-client/src/game/native_hooks.rs`: what the window sees of its own player's
+API 558, `crates/horizon-client/src/game/native_hooks.rs`: what the window sees of its own player's
 fights, on any server (a vanilla one, a plugin server, single player's own thread). The server hooks
 (`native_attack_entity`, `native_living_incoming_damage`) run only where Horizon is the server, so a client mod such as
 a battle-music or combat-HUD mod listens to these instead.
@@ -4078,7 +4399,7 @@ a battle-music or combat-HUD mod listens to these instead.
   names one (the shooter of an arrow, not the arrow; none for falling, lava or a cactus), `player` whether this client
   knows it as a player. An attacker out of this client's tracking range is still named, as not a player.
 
-Both are only told: nothing to answer or cancel. Client only. Bundles need `"hooks": @API:client_combat@`.
+Both are only told: nothing to answer or cancel. Client only. Bundles need `"hooks": 558`.
 
 ### Sounds a client mod plays
 
@@ -4204,7 +4525,7 @@ pieces.
 
 `crates/horizon-client/src/game/native_client_world.rs`: helpers for client mods that read the world in bulk on their
 own threads (a minimap baking tiles, a world map export, a shader pack's CPU side). They read the client world, what
-the window shows: on a client of a server, the chunks the server sent. API @API:client_world_snapshots@.
+the window shows: on a client of a server, the chunks the server sent. API 453.
 
 - `native_client_chunks(from, to)` takes the loaded chunks from chunk `from` to chunk `to` (`[x, z]`, both included, in
   either order) as `NativeClientChunks`, which is `Send` and `Sync`. It shares the chunks with the world, so taking or
@@ -4235,7 +4556,7 @@ bakes again those with a changed chunk, and all of them when `native_client_biom
 
 `crates/horizon-client/src/game/native_structures.rs`: a helper for server mods that reads a structure template without
 placing it, for a builder that places it a block at a time (a colony's builder, a schematic cannon). API
-@API:structure_template@.
+431.
 
 - `native_structure_template(id, at, rotation, mirror)` (`Host::structure_template`) finds template `id` (`mymod:hut`)
   as vanilla's `StructureTemplateManager.get` does: the world's saved structures (`generated/<namespace>/structures/`,
@@ -4316,18 +4637,18 @@ state (not connected, not joined yet or being reconfigured), when the trimmed me
 blocks it: Commands Only blocks chat, Hidden blocks chat and commands. The server's own spam limits apply as they do to
 typed chat. Bundles need `"hooks": 404`.
 
-`native_open_chat(text)` (API @API:open_chat@, same file) opens the chat screen with `text` typed in and the cursor at
+`native_open_chat(text)` (API 456, same file) opens the chat screen with `text` typed in and the cursor at
 its end, as T and / open it: a command macro can fill in `/tp ` for the player to finish. Nothing is sent: the player
 edits and sends it, or presses Escape, and it goes into the chat history then like anything typed. The box keeps its
 256-character limit and its character filter. It is an error with no player in a world, and while another screen
-(the chat itself included) is open. Bundles need `"hooks": @API:open_chat@`.
+(the chat itself included) is open. Bundles need `"hooks": 456`.
 
-While the chat is open, `native_chat_input()` (API @API:chat_input@, `crates/horizon-client/src/game/chat.rs`) gives its
+While the chat is open, `native_chat_input()` (API 557, `crates/horizon-client/src/game/chat.rs`) gives its
 text and cursor (counted in characters), `None` when it's closed, and `native_set_chat_input(text, cursor)` replaces
 them, as an edit: completions refresh as they do for typing, so a mod that turns `:smile:` into an emoji as it's typed
 runs from `native_screen_char_typed_pre` and writes the result back. The cursor is clamped to the text. Only what typing
 lets in reaches the box (no control characters, DEL or section sign), within its 256-character limit. Writing is an
-error while the chat isn't open. Bundles need `"hooks": @API:chat_input@`.
+error while the chat isn't open. Bundles need `"hooks": 557`.
 
 ### Packets a client mod sends
 
@@ -4343,12 +4664,12 @@ Horizon mod stay with `native_net_send_to_server`. Bundles need `"hooks": 409`.
 
 ### Screenshots a client mod takes
 
-API @API:take_screenshot@, `crates/horizon-client/src/game/native_client_services.rs`: `native_take_screenshot()` takes a
+API 555, `crates/horizon-client/src/game/native_client_services.rs`: `native_take_screenshot()` takes a
 screenshot as F2 does (`ScreenShot.grab`): of the next frame, at the game's resolution times Screenshot Quality, into
 `screenshots/` with vanilla's file name, with the same "Saved screenshot as" line in chat. It returns the path (a string) of the file it will
 write, which exists once that frame is drawn. It is an error without a window to draw (a server, an offscreen run with
 no renderer), and while another screenshot waits for the frame (F2's, an agent's or the world icon's): call it again
-next frame. A timed or repeated screenshot mod calls it from its tick. Bundles need `"hooks": @API:take_screenshot@`.
+next frame. A timed or repeated screenshot mod calls it from its tick. Bundles need `"hooks": 555`.
 
 ### Server menus
 

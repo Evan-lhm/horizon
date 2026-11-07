@@ -71,7 +71,7 @@ impl Game<'_> {
         })
     }
     /// Whether the player holds the sneak key (`Entity.isShiftKeyDown`);
-    /// false for the other kinds. API @API:entity_state@.
+    /// false for the other kinds. API 567.
     pub(super) fn native_entity_is_shift_key_down(&self, entity: EntityRef) -> Option<bool> {
         Some(match self.native_entity_body(entity)? {
             Body::Player(p) => p.shift_key_down,
@@ -79,12 +79,12 @@ impl Game<'_> {
         })
     }
     /// Whether the entity crouches (`Entity.isCrouching`: the crouching
-    /// pose). API @API:entity_state@.
+    /// pose). API 567.
     pub(super) fn native_entity_is_crouching(&self, entity: EntityRef) -> Option<bool> {
         Some(self.native_entity_pose(entity)? == "crouching")
     }
     /// Whether the player sprints (`Entity.isSprinting`); false for the
-    /// other kinds. API @API:entity_state@.
+    /// other kinds. API 567.
     pub(super) fn native_entity_is_sprinting(&self, entity: EntityRef) -> Option<bool> {
         Some(match self.native_entity_body(entity)? {
             Body::Player(p) => p.sprinting,
@@ -92,7 +92,7 @@ impl Game<'_> {
         })
     }
     /// Whether the entity touched water at its last fluid update
-    /// (`Entity.isInWater`): players and mobs. API @API:entity_state@.
+    /// (`Entity.isInWater`): players and mobs. API 567.
     pub(super) fn native_entity_is_in_water(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.fluids.was_touching_water),
@@ -101,7 +101,7 @@ impl Game<'_> {
         }
     }
     /// Whether the entity is in lava (`Entity.isInLava`): players and mobs.
-    /// API @API:entity_state@.
+    /// API 567.
     pub(super) fn native_entity_is_in_lava(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.is_in_lava()),
@@ -110,7 +110,7 @@ impl Game<'_> {
         }
     }
     /// Whether the entity's type never burns (`EntityType.fireImmune`):
-    /// players and mobs. API @API:entity_state@.
+    /// players and mobs. API 567.
     pub(super) fn native_entity_fire_immune(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Player(_) => Some(false),
@@ -119,7 +119,7 @@ impl Game<'_> {
         }
     }
     /// The ticks the entity burns for (`Entity.getRemainingFireTicks`):
-    /// players, mobs, armor stands and items. API @API:entity_state@.
+    /// players, mobs, armor stands and items. API 567.
     pub(super) fn native_entity_fire_ticks(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.fire_ticks),
@@ -134,7 +134,7 @@ impl Game<'_> {
         }
     }
     /// The entity's air (`Entity.getAirSupply`): players and mobs. API
-    /// @API:entity_state@.
+    /// 567.
     pub(super) fn native_entity_air_supply(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.air),
@@ -143,7 +143,7 @@ impl Game<'_> {
         }
     }
     /// The most air the entity holds (`Entity.getMaxAirSupply`): 300, a
-    /// dolphin's 4800, an axolotl's 6000. API @API:entity_state@.
+    /// dolphin's 4800, an axolotl's 6000. API 567.
     pub(super) fn native_entity_max_air_supply(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_body(entity)? {
             Body::Mob(m) => Some(max_air(Some(m.species()))),
@@ -151,7 +151,7 @@ impl Game<'_> {
         }
     }
     /// Whether the mob makes no sounds (`Entity.isSilent`, its `Silent`
-    /// tag); false for a player. API @API:entity_state@.
+    /// tag); false for a player. API 567.
     pub(super) fn native_entity_is_silent(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Player(_) => Some(false),
@@ -160,7 +160,7 @@ impl Game<'_> {
         }
     }
     /// Silences the mob or lets it make sounds again (`Entity.setSilent`).
-    /// False for the other kinds. API @API:entity_state@.
+    /// False for the other kinds. API 567.
     pub(super) fn native_entity_set_silent(&mut self, entity: EntityRef, silent: bool) -> bool {
         let Some(Target::Mob(id)) = self.native_entity_target(entity) else {
             return false;
@@ -176,7 +176,7 @@ impl Game<'_> {
     /// Whether the entity's model is hidden (`Entity.isInvisible`): the
     /// invisibility effect on a player or a mob, a mob's or an armor stand's
     /// flag.
-    /// API @API:entity_state@.
+    /// API 567.
     pub(super) fn native_entity_is_invisible(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_target(entity)? {
             Target::Player => Some(self.potions.effects.get("invisibility").is_some()),
@@ -196,7 +196,7 @@ impl Game<'_> {
     }
     /// The entity's pose (`Entity.getPose`) as `Pose` names it: `standing`,
     /// `crouching`, `swimming`, `sleeping`, a warden's `roaring`... Kinds
-    /// with no pose stand. API @API:entity_state@.
+    /// with no pose stand. API 567.
     pub(super) fn native_entity_pose(&self, entity: EntityRef) -> Option<&'static str> {
         Some(match self.native_entity_body(entity)? {
             Body::Player(p) => player_pose(p.pose),

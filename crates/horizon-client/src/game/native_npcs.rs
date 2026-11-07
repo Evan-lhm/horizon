@@ -19,7 +19,7 @@ impl Game<'_> {
     /// A server's player is found too (`minecraft:player`, in its level). None
     /// on a client, for no such entity, and for a player while a guest's
     /// packet is handled (the hub is taken out then): call it from a tick or
-    /// console hook. API @API:npc_entity_by_uuid@.
+    /// console hook. API 534.
     pub(super) fn native_entity_by_uuid(&mut self, uuid: u128) -> Option<(String, u32, String)> {
         if self.remote.is_some() || self.options.execution_role.is_client() {
             return None;
@@ -66,7 +66,7 @@ impl Game<'_> {
     /// level (with `native_entity_by_uuid`, an entity found by its UUID).
     /// False on a client, for a level not loaded, no such entity, or what
     /// `native_entity_merge_nbt` refuses (a player, a kind Horizon can't
-    /// reload yet, data that changes nothing). API @API:npc_entity_by_uuid@.
+    /// reload yet, data that changes nothing). API 534.
     pub(super) fn native_merge_entity_nbt(
         &mut self,
         dimension: &str,
@@ -90,7 +90,7 @@ impl Game<'_> {
     /// with `native_mob_look_at` instead, or spawn it with `no_ai`. False on
     /// a client, for a level not loaded, no such entity (a player is turned
     /// by teleporting them), another kind, or an angle that isn't finite.
-    /// API @API:npc_entity_rotation@.
+    /// API 535.
     pub(super) fn native_set_entity_rotation(
         &mut self,
         dimension: &str,
@@ -141,7 +141,7 @@ impl Game<'_> {
     /// over, as they do from vanilla's callers: call it again (an NPC
     /// library's navigator does so each tick) or give the mob goals of its
     /// own (`native_register_goals`). A mob with `no_ai` keeps the path but
-    /// doesn't walk it. API @API:npc_mob_navigation@.
+    /// doesn't walk it. API 537.
     pub(super) fn native_mob_navigate(
         &mut self,
         dimension: &str,
@@ -166,7 +166,7 @@ impl Game<'_> {
     /// path to where it is now: to follow it, call it again as it moves
     /// (vanilla's follow and attack goals ask every few ticks). False as
     /// `native_mob_navigate`, or for no such target in that level. API
-    /// @API:npc_mob_navigation@.
+    /// 537.
     pub(super) fn native_mob_follow(
         &mut self,
         dimension: &str,
@@ -187,14 +187,14 @@ impl Game<'_> {
         .unwrap_or(false)
     }
     /// Stops mob `mob`'s walk (`PathNavigation.stop`): false for a level not
-    /// loaded or no such living mob. API @API:npc_mob_navigation@.
+    /// loaded or no such living mob. API 537.
     pub(super) fn native_mob_stop(&mut self, dimension: &str, mob: u32) -> bool {
         self.npc_drive(dimension, mob, |m, _| m.nav_stop())
             .is_some()
     }
     /// Whether mob `mob` is walking a path (`PathNavigation.isInProgress`):
     /// false once it arrived, got stuck or was stopped, and for a level not
-    /// loaded or no such living mob. API @API:npc_mob_navigation@.
+    /// loaded or no such living mob. API 537.
     pub(super) fn native_mob_navigating(&mut self, dimension: &str, mob: u32) -> bool {
         self.npc_in_level(dimension, |g| {
             g.mobs
@@ -209,7 +209,7 @@ impl Game<'_> {
     /// holds for that tick only, so call it each tick to keep looking; a mob
     /// with `no_ai` doesn't turn (`native_set_entity_rotation` turns it).
     /// False for a level not loaded, no such living mob or a point that isn't
-    /// finite. API @API:npc_mob_navigation@.
+    /// finite. API 537.
     pub(super) fn native_mob_look_at(&mut self, dimension: &str, mob: u32, at: [f64; 3]) -> bool {
         if !at.into_iter().all(f64::is_finite) {
             return false;
@@ -227,7 +227,7 @@ impl Game<'_> {
     /// when the blow was dealt (whether it hurt is the damage hooks' to
     /// tell); false for a level not loaded, no such living mob or target, the
     /// mob itself, or a player while a guest's packet is handled (the hub is
-    /// taken out then). API @API:npc_mob_attack@.
+    /// taken out then). API 536.
     pub(super) fn native_mob_attack(&mut self, dimension: &str, mob: u32, target: u32) -> bool {
         if mob == target {
             return false;

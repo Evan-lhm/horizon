@@ -83,7 +83,7 @@ pub use horizon_protocol::packets::play::Clientbound as ClientboundPlayPacket;
 pub use horizon_protocol::packets::play::Serverbound as ServerboundPlayPacket;
 pub use horizon_world::consumable::UseAnimation;
 /// Vanilla's `TagParser`: the tag an SNBT text holds and the bytes it read
-/// (`ItemStack::from_nbt` reads an item from it). API @API:item_from_snbt@.
+/// (`ItemStack::from_nbt` reads an item from it). API 525.
 pub use horizon_world::nbt::parse_snbt;
 pub use horizon_world::player_inventory::EquipmentSlot;
 pub use horizon_world::{
@@ -103,7 +103,7 @@ pub use horizon_world::{
 pub use serde_json;
 use serde_json::{Map, Value};
 /// The slot range a menu's input slots take (`native_open_menu_with_input`).
-/// API @API:menu_input@.
+/// API 531.
 pub use std::ops::Range;
 use std::time::Duration;
 /// The window events `input_key` hands over (`winit::event::KeyEvent`) and their key types.
@@ -474,7 +474,7 @@ pub struct NativeZoom {
 }
 
 /// A boss bar a server mod shows one player (`native_boss_bar`), as Bukkit's
-/// `BossBar` holds it. API @API:boss_bar@.
+/// `BossBar` holds it. API 515.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NativeBossBar {
     pub name: Text,
@@ -494,7 +494,7 @@ pub struct NativeBossBar {
 
 /// One open level of a server, counted for a diagnostics mod (`native_level_stats`): Bukkit's
 /// `World.getLoadedChunks`, `getForceLoadedChunks`, `getEntities` and `Chunk.getTileEntities`
-/// in numbers. API @API:level_stats@.
+/// in numbers. API 527.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub struct NativeLevelStats {
@@ -514,7 +514,7 @@ pub struct NativeLevelStats {
 }
 
 /// What one mob type cost one level's ticks while a mod sampled them
-/// (`native_take_mob_costs`). API @API:server_tick_timed@.
+/// (`native_take_mob_costs`). API 548.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub struct NativeMobCost {
@@ -557,7 +557,7 @@ pub struct NativeServerPlayer {
     pub address: String,
     /// The connection's round-trip time in milliseconds, as the keep-alive measured it and the
     /// player list shows it (`ServerCommonPacketListenerImpl.latency`). The fields below are API
-    /// @API:server_player_state@; 0, false or None where the server does not hold them.
+    /// 504; 0, false or None where the server does not hold them.
     pub latency: i32,
     /// The protocol version the client connected with (the server's own: others are refused).
     pub protocol: i32,
@@ -588,7 +588,7 @@ pub struct NativeServerPlayer {
 }
 
 /// What a player's client told the server about itself, and what the server sent it
-/// (`native_player_client`). API @API:player_client@.
+/// (`native_player_client`). API 473.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct NativeClientInfo {
@@ -625,7 +625,7 @@ pub struct NativeCommand {
     /// The operator level a player needs to see and run it (0: everyone).
     pub level: u8,
     /// The permission node that decides instead, when set
-    /// ([`NativeCommand::permission`]). API @API:command_permission@.
+    /// ([`NativeCommand::permission`]). API 460.
     pub permission: Option<String>,
 }
 
@@ -652,7 +652,7 @@ impl NativeCommand {
     /// the command, so a permissions mod grants or refuses it whatever the
     /// player's level, and without one the level decides as before. A
     /// command's node is the first one its usages give.
-    /// API @API:command_permission@.
+    /// API 460.
     pub fn permission(mut self, node: &str) -> Self {
         self.permission = Some(node.to_owned());
         self
