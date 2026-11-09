@@ -7,7 +7,7 @@
 //! The section arena keeps its compact layout: a section about to get a BLAS has its solid quads
 //! written out as vertices first (`Unpacker`, `rt_unpack.wgsl`), as the solid draws expand them.
 
-use glam::DVec3;
+use glam::{DVec3, Mat4};
 
 use crate::fast_hash::FxHashMap;
 use crate::gfx::{Renderer, SectionGpu, SectionKey, arena::Arena, resident::Resident};
@@ -40,10 +40,13 @@ impl Renderer {
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         camera: DVec3,
-        title: bool,
+        frame: &crate::gfx::Frame<'_>,
+        jittered: Mat4,
     ) {
+        // A shader pack lights the world its own way.
+        let pack = self.native.is_some() || self.pack_post.as_ref().is_some_and(|p| p.1.is_some());
         if let Some(rt) = &mut self.ray_scene
-            && !title
+            && !frame.title
         {
             crate::spans::time("ray scene", || {
                 rt.prepare(
@@ -54,7 +57,20 @@ impl Renderer {
                     &self.arena,
                     &self.indices,
                     camera,
-                )
+                );
+                let sky = frame.skybox && !pack;
+                rt.sprites.clone_from(&self.sprite_views);
+                rt.split = self.sprite_split;
+                rt.light.set_frame(
+                    &self.queue,
+                    rt.anchor,
+                    rt.reach,
+                    jittered,
+                    frame.sky.sun_angle,
+                    camera,
+                    sky,
+                    [frame.sky.sky_color, frame.sky.fog_color],
+                );
             });
         }
     }
@@ -76,8 +92,13 @@ pub(in crate::gfx) struct RayScene {
     to_compact: Vec<(SectionKey, wgpu::Blas)>,
     /// BLAS whose compacted size the GPU is measuring.
     compacting: Vec<(SectionKey, wgpu::Blas)>,
-    /// Sections in the arena's compact layout, written out as vertices for their BLAS.
+    /// Every traced section's quads as vertices, which the BLAS are built from and rays read.
     unpacker: Unpacker,
+    /// The lighting traced through it (`ray_light`).
+    pub(in crate::gfx) light: super::ray_light::RayLight,
+    /// The block sprite arrays this frame, `split` layers each (the renderer's).
+    sprites: Vec<wgpu::TextureView>,
+    split: u32,
 }
 
 impl RayScene {
@@ -98,8 +119,41 @@ impl RayScene {
             reach,
             to_compact: Vec::new(),
             compacting: Vec::new(),
-            unpacker: Unpacker::new(device, 1 << 20),
+            unpacker: Unpacker::new(device, 1 << 22),
+            light: super::ray_light::RayLight::new(device),
+            sprites: Vec::new(),
+            split: 1,
         })
+    }
+
+    /// Whether this frame lights the world (`ray_light`): the world pass keeps its depth.
+    pub(in crate::gfx) fn lit(&self) -> bool {
+        self.light.armed()
+    }
+
+    /// Ray-traced light over the opaque world in `color`, from its `depth`, or with
+    /// `reflections` the reflections on its water once translucent terrain is drawn
+    /// (`ray_light`); then the world pass again.
+    pub(in crate::gfx) fn pass<'e>(
+        &mut self,
+        device: &wgpu::Device,
+        encoder: &'e mut wgpu::CommandEncoder,
+        color: &wgpu::TextureView,
+        depth: &wgpu::TextureView,
+        timing: Option<&mut crate::gfx::pack_timing::PassTiming>,
+        reflections: bool,
+    ) -> wgpu::RenderPass<'e> {
+        let (tlas, store, sprites, split) =
+            (&self.tlas, &self.unpacker.out, &self.sprites, self.split);
+        if reflections {
+            self.light
+                .reflect(device, encoder, tlas, store, color, depth, sprites, split);
+        } else {
+            self.light
+                .draw(device, encoder, tlas, store, color, depth, sprites, split);
+        }
+        let label = "World after ray tracing";
+        crate::gfx::world_pass_after_culling(encoder, color, depth, true, timing, label)
     }
 
     fn mark(&mut self, key: SectionKey) {
@@ -107,6 +161,8 @@ impl RayScene {
     }
 
     fn clear(&mut self) {
+        self.unpacker.slots.clear();
+        self.unpacker.next = 0;
         self.blas.clear();
         self.dirty.clear();
         self.to_compact.clear();
@@ -163,6 +219,7 @@ impl RayScene {
         if self.anchor != Some(column) {
             let before = self.blas.len();
             self.blas.retain(|k, _| within(k, column, keep));
+            self.unpacker.slots.retain(|k, _| within(k, column, keep));
             changed |= self.blas.len() != before;
             for (key, s, _) in sections.iter() {
                 if within(&key, column, self.reach) && s.solid > 0 && !self.blas.contains_key(&key)
@@ -174,8 +231,7 @@ impl RayScene {
         let take = self.dirty.len().min(BUILDS_PER_FRAME);
         let mut builds: Vec<Build<'_>> = Vec::new();
         let mut deferred = Vec::new();
-        // Vertices the unpacker writes this frame.
-        let mut unpacked = 0;
+        let mut full = false;
         for key in self.dirty.drain(..take) {
             if builds.iter().any(|b| b.key == key) {
                 continue;
@@ -185,21 +241,14 @@ impl RayScene {
                 .filter(|s| s.solid > 0 && within(&key, column, self.reach))
             {
                 Some(s) => {
-                    let at = if s.packed {
-                        let vertices = u64::from(s.solid) * 4;
-                        if unpacked + vertices > self.unpacker.capacity {
-                            if unpacked > 0 {
-                                // The rest waits for the next frame's room.
-                                deferred.push(key);
-                                continue;
-                            }
-                            self.unpacker.grow(device, vertices);
-                        }
-                        unpacked += vertices;
-                        Some(unpacked - vertices)
-                    } else {
-                        None
+                    let vertices = u64::from(s.solid) * 4;
+                    let Some(at) = self.unpacker.alloc(key, vertices) else {
+                        // Full: the rest waits until the store is laid out again.
+                        full = true;
+                        deferred.push(key);
+                        continue;
                     };
+                    let at = Some(at);
                     let (size, blas) = new_blas(device, s.solid);
                     builds.push(Build {
                         key,
@@ -209,10 +258,22 @@ impl RayScene {
                         unpacked: at,
                     });
                 }
-                None => changed |= self.blas.remove(&key).is_some(),
+                None => {
+                    self.unpacker.slots.remove(&key);
+                    changed |= self.blas.remove(&key).is_some();
+                }
             }
         }
         self.dirty.extend(deferred);
+        if full && builds.is_empty() {
+            // Lay the store out again, larger if the live sections need it: every BLAS is
+            // built again from it over the next frames.
+            let live: u64 = self.unpacker.slots.values().map(|s| s.1).sum();
+            self.unpacker.reset(device, live * 2);
+            self.blas.clear();
+            self.anchor = None;
+            return;
+        }
         if builds.is_empty() && !changed && self.anchor == Some(column) {
             return;
         }
@@ -230,12 +291,14 @@ impl RayScene {
         let mut n = 0;
         for (key, blas) in self.blas.iter().filter(|(k, _)| near(k)) {
             let o = instance_origin(*key, min_y, column);
+            // Its custom data: its first quad in the store, where rays read what they hit.
+            let first = self.unpacker.slots.get(key).map_or(0, |s| s.0 / 4) as u32;
             self.tlas[n] = Some(wgpu::TlasInstance::new(
                 blas,
                 [
                     1.0, 0.0, 0.0, o[0], 0.0, 1.0, 0.0, o[1], 0.0, 0.0, 1.0, o[2],
                 ],
-                0,
+                first,
                 0xff,
             ));
             n += 1;
@@ -270,10 +333,8 @@ struct Build<'a> {
 impl Build<'_> {
     /// The buffer holding its solid quads as vertices, and its first vertex there.
     fn vertices<'b>(&self, arena: &'b Arena, unpacker: &'b Unpacker) -> (&'b wgpu::Buffer, u64) {
-        match self.unpacked {
-            Some(at) => (&unpacker.out, at),
-            None => (arena.buffer(self.s.page), self.s.start),
-        }
+        let _ = arena;
+        (&unpacker.out, self.unpacked.unwrap_or(0))
     }
 }
 
@@ -295,6 +356,10 @@ struct Unpacker {
     out: wgpu::Buffer,
     /// Vertices `out` holds.
     capacity: u64,
+    /// The next free vertex: slots are handed out in order until the store is laid out again.
+    next: u64,
+    /// Each section's first vertex and vertex count in `out`.
+    slots: FxHashMap<SectionKey, (u64, u64)>,
 }
 
 impl Unpacker {
@@ -315,13 +380,31 @@ impl Unpacker {
             pipeline,
             out: unpacked_buffer(device, capacity),
             capacity,
+            next: 0,
+            slots: FxHashMap::default(),
         }
     }
 
-    /// Room for at least `vertices` (one section larger than the buffer).
-    fn grow(&mut self, device: &wgpu::Device, vertices: u64) {
-        self.capacity = vertices.next_power_of_two();
-        self.out = unpacked_buffer(device, self.capacity);
+    /// A slot of `vertices` for section `key`, none when the store is full.
+    fn alloc(&mut self, key: SectionKey, vertices: u64) -> Option<u64> {
+        if self.next + vertices > self.capacity {
+            return None;
+        }
+        let at = self.next;
+        self.next += vertices;
+        self.slots.insert(key, (at, vertices));
+        Some(at)
+    }
+
+    /// An empty store of at least `vertices` (custom data holds a quad index in 24 bits).
+    fn reset(&mut self, device: &wgpu::Device, vertices: u64) {
+        let capacity = vertices.next_power_of_two().clamp(self.capacity, 1 << 26);
+        if capacity != self.capacity {
+            self.capacity = capacity;
+            self.out = unpacked_buffer(device, capacity);
+        }
+        self.next = 0;
+        self.slots.clear();
     }
 
     /// Writes out the builds' sections that are in the compact layout, one dispatch per arena
@@ -439,7 +522,8 @@ fn new_blas(
         vertex_count: solid * 4,
         index_format: Some(wgpu::IndexFormat::Uint32),
         index_count: Some(solid * 6),
-        flags: wgpu::AccelerationStructureGeometryFlags::OPAQUE,
+        // Not opaque: rays test leaves' and plants' texels (`ray_light.wgsl`'s `kept`).
+        flags: wgpu::AccelerationStructureGeometryFlags::empty(),
     };
     let blas = device.create_blas(
         &wgpu::CreateBlasDescriptor {

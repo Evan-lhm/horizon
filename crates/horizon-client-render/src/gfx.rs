@@ -8826,7 +8826,7 @@ impl Renderer {
                 mapped_at_creation: false,
             });
         }
-        self.ray_prepare(&mut encoder, camera, frame.title);
+        self.ray_prepare(&mut encoder, camera, frame, jittered);
         self.origins.clear();
         let (sections, retiring) = (&self.sections, &self.lod_retiring);
         laps.lap("r_cameras");
@@ -10484,7 +10484,7 @@ impl Renderer {
         let pack_flat = material.and_then(|(m, _)| m.flat.as_ref());
         // A material stage's translucent pass reads a copy of the depth the solid terrain
         // left: it is stored across the pass that ends before the copy.
-        let keep_depth = keep_depth || material.is_some();
+        let keep_depth = keep_depth || material.is_some() || self.ray_scene.is_some();
         // GPU culling's occlusion test splits the world pass as cull.rs's does.
         let gpu_occluding = gpu_frame && self.gpu_culling.as_ref().is_some_and(|g| g.occluding());
         let pack_frame = |pass: &mut wgpu::RenderPass<'_>| {
@@ -11178,6 +11178,21 @@ impl Renderer {
                 pass.set_vertex_buffer(0, self.debug_line_buffer.slice(..));
                 pass.draw(0..4, debug_depth..debug_depth + debug_top);
             }
+            // Ray-traced light over the opaque world (`ray_light`), in a pass of its own.
+            if let Some(rt) = self.ray_scene.as_mut().filter(|r| r.lit()) {
+                drop(pass);
+                let timing = self.own_timing.as_mut();
+                pass = rt.pass(
+                    &self.device,
+                    &mut encoder,
+                    world_view,
+                    world_depth,
+                    timing,
+                    false,
+                );
+                pass.set_bind_group(0, &self.group, &[]);
+                pack_frame(&mut pass);
+            }
             // One of Horizon's own packs reads the world before translucent terrain
             // (`opaque_depth`, `opaque_color`): the pass ends, the targets are copied, and a
             // pass that loads both carries on.
@@ -11523,6 +11538,21 @@ impl Renderer {
                 pass.set_vertex_buffer(0, self.cloud_buffer.slice(..));
                 pass.draw_indexed(0..cloud_quads * 6, 0, 0..1);
                 self.mark_clouds(&mut pass, cloud_quads);
+            }
+            // Ray-traced reflections on the water (`ray_light`), in a pass of their own.
+            if let Some(rt) = self.ray_scene.as_mut().filter(|r| r.lit()) {
+                drop(pass);
+                let timing = self.own_timing.as_mut();
+                pass = rt.pass(
+                    &self.device,
+                    &mut encoder,
+                    world_view,
+                    world_depth,
+                    timing,
+                    true,
+                );
+                pass.set_bind_group(0, &self.group, &[]);
+                pack_frame(&mut pass);
             }
             // LevelRenderer.executeClassicTransparency: weather after translucent
             // terrain and clouds, so the water behind the rain is drawn first.
@@ -14038,6 +14068,9 @@ mod tests {
             if name == "oit.wgsl" || name == "gpu_occlusion.wgsl" || name == "hdr_light.wgsl" {
                 // The shared maths: it needs the file it is appended to. GPU culling's
                 // occlusion test is appended to gpu_culling.wgsl, on Vulkan alone.
+                continue;
+            } else if name.starts_with("ray_light") {
+                // Ray queries: GLSL has none (`ray_light`'s own test validates them).
                 continue;
             } else if name == "rt_unpack.wgsl" {
                 // Appended to terrain.wgsl (`ray_scene`'s `Unpacker`), on ray tracing devices.

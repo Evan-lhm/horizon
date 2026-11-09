@@ -3,6 +3,9 @@
 //! draws with it yet. Without the variable, and in a build without `horizon-extras` (a Horizon
 //! extra, docs/layers.md), the device is opened exactly as before.
 
+/// The lighting traced through them (step 3).
+#[path = "ray_light.rs"]
+mod ray_light;
 /// The terrain's acceleration structures (step 2).
 #[path = "ray_scene.rs"]
 pub(in crate::gfx) mod ray_scene;
