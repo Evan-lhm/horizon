@@ -35,6 +35,8 @@ struct Params {
 /// The frames' history, two of each to read last frame's while writing this one's.
 struct Targets {
     size: [u32; 2],
+    /// The world colour's format: history is dropped when it changes.
+    format: wgpu::TextureFormat,
     color: [wgpu::TextureView; 2],
     aux: [wgpu::TextureView; 2],
     /// The world's depth with only its opaque part: the reflections tell water by it.
@@ -222,15 +224,19 @@ impl RayLight {
             return;
         }
         let size = [depth.texture().width(), depth.texture().height()];
-        if self.targets.as_ref().is_none_or(|t| t.size != size) {
-            self.targets = Some(targets(device, size, depth.texture().format()));
+        let format = color.texture().format();
+        if self
+            .targets
+            .as_ref()
+            .is_none_or(|t| t.size != size || t.format != format)
+        {
+            self.targets = Some(targets(device, size, format, depth.texture().format()));
         }
         let srgb_sprites = sprites[0].texture().format().is_srgb();
         if self.trace.as_ref().is_none_or(|(s, _)| *s != split) {
             let pipeline = self.trace_pipeline(device, split, srgb_sprites);
             self.trace = Some((split, pipeline));
         }
-        let format = color.texture().format();
         if self.composite.as_ref().is_none_or(|(f, _)| *f != format) {
             self.composite = Some((format, composite_pipeline(device, format)));
         }
@@ -526,7 +532,12 @@ fn composite_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> wgp
     })
 }
 
-fn targets(device: &wgpu::Device, size: [u32; 2], depth: wgpu::TextureFormat) -> Targets {
+fn targets(
+    device: &wgpu::Device,
+    size: [u32; 2],
+    format: wgpu::TextureFormat,
+    depth: wgpu::TextureFormat,
+) -> Targets {
     let make = |format| {
         device
             .create_texture(&wgpu::TextureDescriptor {
@@ -563,6 +574,7 @@ fn targets(device: &wgpu::Device, size: [u32; 2], depth: wgpu::TextureFormat) ->
     let view = opaque.create_view(&Default::default());
     Targets {
         size,
+        format,
         color: [make(HISTORY), make(HISTORY)],
         aux: [make(AUX), make(AUX)],
         opaque: (opaque, view),
@@ -583,15 +595,10 @@ const OVER: wgpu::BlendState = wgpu::BlendState {
     },
 };
 
-/// Whether a target in `format` holds gamma-encoded colour, as vanilla's does.
+/// Whether a target in `format` holds gamma-encoded colour, as vanilla's does: every format
+/// but sRGB ones, float frames included (docs/hdr-passes.md).
 fn encodes(format: wgpu::TextureFormat) -> bool {
     !format.is_srgb()
-        && !matches!(
-            format,
-            wgpu::TextureFormat::Rgba16Float
-                | wgpu::TextureFormat::Rgba32Float
-                | wgpu::TextureFormat::Rg11b10Ufloat
-        )
 }
 
 /// Where the lighting fades out, horizontally from the camera (over the last two chunks the

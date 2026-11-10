@@ -51,7 +51,7 @@ override SPRITE_SPLIT: u32 = 2048u;
 // 1 for a target holding gamma-encoded colour (`fs_reflect`).
 override ENCODE: f32 = 0.0;
 // ray_light_blend.wgsl's.
-const EXPOSURE: f32 = 0.85;
+const EXPOSURE: f32 = 0.4;
 // 1 when the sprites are sRGB textures (read back linear), 0 when they hold sRGB values as is.
 override SRGB_SPRITES: f32 = 1.0;
 // terrain.wgsl's `UV_STEPS`.
@@ -228,6 +228,13 @@ fn direct(p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     return params.light_color.rgb * ndl * select(0.0, 1.0, open);
 }
 
+// Light in the tone-weighted space history blends in, and back.
+fn tone(c: vec3<f32>) -> vec3<f32> { return c / (1.0 + max(c.r, max(c.g, c.b))); }
+fn untone(c: vec3<f32>) -> vec3<f32> {
+    let m = min(max(c.r, max(c.g, c.b)), 0.999);
+    return max(c, vec3(0.0)) / (1.0 - m);
+}
+
 struct Out {
     // Linear light, and the samples it averages (0: vanilla's lighting stays).
     @location(0) color: vec4<f32>,
@@ -284,16 +291,12 @@ struct Out {
             let expected = length(s.p - params.prev_camera.xyz);
             if hc.a > 0.0 && abs(hd - expected) < 0.02 * expected + 0.06 {
                 count = min(hc.a + 1.0, MAX_HISTORY);
-                out = mix(hc.rgb, col, 1.0 / count);
+                // Tone-weighted (docs/hdr-passes.md, rule 3), so a few bright samples don't win.
+                out = untone(mix(tone(max(hc.rgb, vec3(0.0))), tone(col), 1.0 / count));
             }
         }
     }
     return Out(vec4(out, count), vec2(length(s.p - cam), fade));
-}
-
-// Narkowicz's fit of ACES, as ray_light_blend.wgsl.
-fn aces(x: vec3<f32>) -> vec3<f32> {
-    return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), vec3(0.0), vec3(1.0));
 }
 
 // What a reflected ray sees of face `s`: its sun, sky and block light, without a bounce.
@@ -312,13 +315,17 @@ fn seen(s: Surf) -> vec3<f32> {
     let px = vec2<i32>(frag.xy);
     let d = textureLoad(depth, px, 0);
     let o = textureLoad(opaque_depth, px, 0);
-    // Reversed depth: nearer is larger.
-    if d <= o + 0.000001 { return vec4(0.0); }
     let ndc = vec2((frag.x / size.x) * 2.0 - 1.0, 1.0 - (frag.y / size.y) * 2.0);
     let p4 = params.inverse_view_proj * vec4(ndc, d, 1.0);
     let p = p4.xyz / p4.w;
-    let y = p.y + params.camera.y;
-    if p.y >= 0.0 || abs(fract(y) - 0.8889) > 0.004 { return vec4(0.0); }
+    // The surface's slope, before any branch.
+    let g = normalize(cross(dpdy(p), dpdx(p)));
+    // Reversed depth: nearer is larger. Water's top, drawn 0.001 under 8/9 of a block, seen
+    // from above.
+    let y = fract(p.y + params.camera.y);
+    if d <= o + 0.000001 || p.y >= 0.0 || abs(g.y) < 0.9 || abs(y - 0.8879) > 0.03 {
+        return vec4(0.0);
+    }
     let fade = 1.0 - smoothstep(params.fade.x, params.fade.y, length(p.xz));
     if fade <= 0.0 { return vec4(0.0); }
     seed = (u32(px.x) * 1973u + u32(px.y) * 9277u + u32(params.camera.w) * 26699u) | 1u;
@@ -341,7 +348,7 @@ fn seen(s: Surf) -> vec3<f32> {
         col = seen(surface(h, origin, r));
     }
     let fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(-v, n), 0.0), 5.0);
-    var out = aces(col * EXPOSURE);
+    var out = max(col * EXPOSURE, vec3(0.0));
     if ENCODE > 0.5 { out = pow(out, vec3(1.0 / 2.2)); }
     return vec4(out, clamp(mix(0.1, 1.0, fresnel), 0.0, 1.0) * fade);
 }
