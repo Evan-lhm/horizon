@@ -8,7 +8,7 @@
 // 1 for a target holding gamma-encoded colour.
 override ENCODE: f32 = 0.0;
 // Linear light times this, as ray_light_blend.wgsl's.
-const EXPOSURE: f32 = 0.4;
+const EXPOSURE: f32 = 0.3;
 // Light (after exposure) above this blooms, softly over KNEE either side.
 const THRESHOLD: f32 = 0.7;
 const KNEE: f32 = 0.25;

@@ -721,7 +721,18 @@ fn composite_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> wgp
         label: Some("Ray-traced light, blend"),
         source: wgpu::ShaderSource::Wgsl(include_str!("../ray_light_blend.wgsl").into()),
     });
-    let constants = [("ENCODE", if encodes(format) { 1.0 } else { 0.0 })];
+    let constants = [
+        ("ENCODE", if encodes(format) { 1.0 } else { 0.0 }),
+        // Only the float frame goes through the tone curve.
+        (
+            "SHOULDER",
+            if format == crate::gfx::LINEAR_FRAME {
+                0.0
+            } else {
+                1.0
+            },
+        ),
+    ];
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("Ray-traced light, blend"),
         layout: None,
@@ -858,11 +869,11 @@ fn celestial(sun_angle_degrees: f32) -> (Vec3, [f32; 4], f32) {
     let day = smoothstep(-0.12, 0.15, sun.y);
     // Warmer near the horizon.
     let low = 1.0 - smoothstep(0.0, 0.45, sun.y);
-    let sun_color = Vec3::new(1.0, 0.93 - 0.25 * low, 0.82 - 0.45 * low) * 2.2 * day;
+    let sun_color = Vec3::new(1.0, 0.93 - 0.25 * low, 0.82 - 0.45 * low) * day;
     let (dir, color) = if day > 0.02 {
         (sun, sun_color)
     } else {
-        (-sun, Vec3::new(0.3, 0.45, 1.0) * 0.16)
+        (-sun, Vec3::new(0.3, 0.45, 1.0) * 0.75)
     };
     (dir, [color.x, color.y, color.z, 0.0], day)
 }
@@ -885,9 +896,9 @@ mod tests {
     #[test]
     fn the_moon_lights_the_night() {
         let (dir, color, day) = celestial(180.0);
-        assert!(dir.y > 0.99 && color[0] < 0.2 && day < 0.01);
+        assert!(dir.y > 0.99 && color[0] < 0.3 && day < 0.01);
         let (dir, color, _) = celestial(0.0);
-        assert!(dir.y > 0.99 && color[0] > 1.5);
+        assert!(dir.y > 0.99 && color[0] > 0.9);
     }
 
     #[test]

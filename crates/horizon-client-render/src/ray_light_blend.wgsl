@@ -43,8 +43,10 @@ fn linear_fog(d: f32, start: f32, end: f32) -> f32 {
 }
 // 1 for a target holding gamma-encoded colour.
 override ENCODE: f32 = 0.0;
+// 1 when no tone curve follows (Hdr::tonemap only runs on the float frame): values over 1 would clip.
+override SHOULDER: f32 = 0.0;
 // Linear light times this: 1.0 is paper white (docs/hdr-passes.md), no tone curve.
-const EXPOSURE: f32 = 0.4;
+const EXPOSURE: f32 = 0.3;
 
 @vertex fn vs_main(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
     let uv = vec2(f32((i << 1u) & 2u), f32(i & 2u));
@@ -78,6 +80,12 @@ const EXPOSURE: f32 = 0.4;
     let p4 = params.inverse_view_proj * vec4(ndc, 1.0, 1.0);
     let dir = normalize(p4.xyz / p4.w);
     var col = max(fogged(sum / weight * EXPOSURE, a.x, dir), vec3(0.0));
+    if SHOULDER > 0.5 {
+        // Soft shoulder: linear up to the knee, then easing into 1.
+        let k = 0.5;
+        let d = max(col - k, vec3(0.0)) / (1.0 - k);
+        col = min(col, vec3(k)) + (1.0 - k) * d / (1.0 + d);
+    }
     if ENCODE > 0.5 { col = pow(col, vec3(1.0 / 2.2)); }
     return vec4(col, a.y);
 }

@@ -69,7 +69,7 @@ override SPRITE_SPLIT: u32 = 2048u;
 // 1 for a target holding gamma-encoded colour (`fs_reflect`).
 override ENCODE: f32 = 0.0;
 // ray_light_blend.wgsl's.
-const EXPOSURE: f32 = 0.4;
+const EXPOSURE: f32 = 0.3;
 // How much sunlight the air scatters per block (`fs_volume`).
 const HAZE: f32 = 0.05;
 // 1 when the sprites are sRGB textures (read back linear), 0 when they hold sRGB values as is.
@@ -235,15 +235,17 @@ fn cone_dir(d: vec3<f32>, angle: f32) -> vec3<f32> {
 
 // The sky's light from direction `d`, from vanilla's sky and fog colours.
 fn sky_radiance(d: vec3<f32>) -> vec3<f32> {
-    let zenith = params.sky.rgb * 0.75;
-    let horizon = params.horizon.rgb * 0.75;
+    // Vanilla's night sky is near black, so add a bluish ambient that fades out by day.
+    let night = (1.0 - params.sky.w) * vec3(0.08, 0.13, 0.27);
+    let zenith = params.sky.rgb * 0.6 + night;
+    let horizon = params.horizon.rgb * 0.6 + night;
     if d.y < 0.0 { return horizon * 0.3; }
     return mix(horizon, zenith, sqrt(d.y));
 }
 
 // Torches, lamps and lava, as vanilla's block light measures them.
 fn block_glow(level: f32) -> vec3<f32> {
-    return vec3(1.0, 0.68, 0.38) * pow(level, 2.6) * 3.8;
+    return vec3(1.0, 0.68, 0.38) * pow(level, 2.6) * 5.0;
 }
 
 fn random_unit_vector() -> vec3<f32> {
