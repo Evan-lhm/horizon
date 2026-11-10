@@ -350,8 +350,10 @@ struct Out {
             let hc = textureLoad(hist_color, pp, 0);
             let hd = textureLoad(hist_aux, pp, 0).x;
             let expected = length(s.p - params.prev_camera.xyz);
-            if hc.a > 0.0 && abs(hd - expected) < 0.02 * expected + 0.06 {
-                count = min(hc.a + 1.0, MAX_HISTORY);
+            if hc.a > 0.0 && abs(hd - expected) < 0.01 * expected + 0.04 {
+                // A point that moved on screen (past the jitter) keeps a shorter history: no trails.
+                let moved = max(length(puv * size - frag.xy) - 1.0, 0.0);
+                count = min(hc.a + 1.0, max(MAX_HISTORY / (1.0 + 0.5 * moved), 6.0));
                 // Tone-weighted (docs/hdr-passes.md, rule 3), so a few bright samples don't win.
                 out = untone(mix(tone(max(hc.rgb, vec3(0.0))), tone(col), 1.0 / count));
             }
