@@ -43,6 +43,8 @@ struct Targets {
     format: wgpu::TextureFormat,
     color: [wgpu::TextureView; 2],
     aux: [wgpu::TextureView; 2],
+    /// This frame's albedo: `color` holds light divided by it.
+    albedo: wgpu::TextureView,
     /// The bloom's quarter-resolution targets.
     bloom: [wgpu::TextureView; 2],
     /// The world's depth with only its opaque part: the reflections tell water by it.
@@ -181,6 +183,7 @@ impl RayLight {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
+                bloom_tex(3, false),
             ],
         });
         Self {
@@ -341,7 +344,11 @@ impl RayLight {
             };
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Ray-traced light"),
-                color_attachments: &[target(&t.color[cur]), target(&t.aux[cur])],
+                color_attachments: &[
+                    target(&t.color[cur]),
+                    target(&t.aux[cur]),
+                    target(&t.albedo),
+                ],
                 ..Default::default()
             });
             pass.set_pipeline(trace);
@@ -363,6 +370,10 @@ impl RayLight {
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: self.params.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&t.albedo),
                 },
             ],
         });
@@ -470,6 +481,10 @@ impl RayLight {
                     wgpu::BindGroupEntry {
                         binding: 2,
                         resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(&t.albedo),
                     },
                 ],
             })
@@ -693,7 +708,7 @@ impl RayLight {
                     constants: &constants,
                     ..Default::default()
                 },
-                targets: &[target(HISTORY), target(AUX)],
+                targets: &[target(HISTORY), target(AUX), target(HISTORY)],
             }),
             primitive: Default::default(),
             depth_stencil: None,
@@ -809,6 +824,7 @@ fn targets(
         format,
         color: [make(HISTORY, size), make(HISTORY, size)],
         aux: [make(AUX, size), make(AUX, size)],
+        albedo: make(HISTORY, size),
         bloom: [make(HISTORY, quarter), make(HISTORY, quarter)],
         opaque: (opaque, view),
     }

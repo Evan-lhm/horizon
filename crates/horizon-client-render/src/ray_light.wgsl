@@ -287,10 +287,12 @@ struct Out {
     @location(0) color: vec4<f32>,
     // The point's distance from the camera, and how much the traced light shows.
     @location(1) aux: vec2<f32>,
+    // This frame's albedo, no history: `color` is light divided by it, so the texture stays crisp.
+    @location(2) albedo: vec4<f32>,
 }
 
 @fragment fn fs_trace(@builtin(position) frag: vec4<f32>) -> Out {
-    let none = Out(vec4(0.0), vec2(0.0));
+    let none = Out(vec4(0.0), vec2(0.0), vec4(0.0));
     let size = vec2<f32>(textureDimensions(depth));
     let px = vec2<i32>(frag.xy);
     let d = textureLoad(depth, px, 0);
@@ -350,7 +352,9 @@ struct Out {
         col = s.albedo * light * (vec3(1.0) - fr) * (1.0 - s.metal) + spec * fr
             + s.albedo * (s.emission + block_glow(s.block) * s.metal * 0.5);
     }
-    col = min(col, vec3(16.0));
+    // Demodulated: the history and the blur average light, not texture (ray_light_blend.wgsl multiplies back).
+    let albedo = max(s.albedo, vec3(0.02));
+    col = min(col, vec3(16.0)) / albedo;
     // The history at this point last frame, unless it was another surface then.
     var count = 1.0;
     var out = col;
@@ -372,7 +376,7 @@ struct Out {
             }
         }
     }
-    return Out(vec4(out, count), vec2(length(s.p - cam), fade));
+    return Out(vec4(out, count), vec2(length(s.p - cam), fade), vec4(albedo, 1.0));
 }
 
 // What a reflected ray sees of face `s`: its sun, sky and block light, without a bounce.

@@ -5,6 +5,8 @@
 // The trace's aux (distance, fade), full size.
 @group(0) @binding(1) var aux: texture_2d<f32>;
 @group(0) @binding(2) var smp: sampler;
+// The trace's albedo: its light is divided by it (fs_bright only).
+@group(0) @binding(3) var albedo: texture_2d<f32>;
 // 1 for a target holding gamma-encoded colour.
 override ENCODE: f32 = 0.0;
 // Linear light times this, as ray_light_blend.wgsl's.
@@ -24,10 +26,10 @@ const SIGMA: f32 = 3.0;
 }
 
 // The part of one sample above the threshold, keeping its hue.
-fn bright(c: vec4<f32>, fade: f32) -> vec3<f32> {
+fn bright(c: vec4<f32>, alb: vec3<f32>, fade: f32) -> vec3<f32> {
     if c.a <= 0.0 { return vec3(0.0); }
     // Capped so one noisy sample does not flare.
-    let l = min(c.rgb * EXPOSURE, vec3(16.0));
+    let l = min(c.rgb * alb * EXPOSURE, vec3(16.0));
     let m = max(l.x, max(l.y, l.z));
     let s = clamp(m - THRESHOLD + KNEE, 0.0, 2.0 * KNEE);
     let keep = s * s / (4.0 * KNEE) + max(m - THRESHOLD - KNEE, 0.0);
@@ -41,7 +43,7 @@ fn bright(c: vec4<f32>, fade: f32) -> vec3<f32> {
     for (var y = 0; y < 4; y++) {
         for (var x = 0; x < 4; x++) {
             let q = min(base + vec2(x, y), size - 1);
-            sum += bright(textureLoad(src, q, 0), textureLoad(aux, q, 0).y);
+            sum += bright(textureLoad(src, q, 0), textureLoad(albedo, q, 0).rgb, textureLoad(aux, q, 0).y);
         }
     }
     return vec4(sum / 16.0, 1.0);

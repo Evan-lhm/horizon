@@ -29,6 +29,8 @@ struct Params {
     fog: vec4<f32>,
 }
 @group(0) @binding(2) var<uniform> params: Params;
+// This frame's albedo: `light` is divided by it.
+@group(0) @binding(3) var albedo: texture_2d<f32>;
 
 // terrain.wgsl's `apply_fog` on linear light, for a point `dist` away along unit `dir`.
 fn fogged(col: vec3<f32>, dist: f32, dir: vec3<f32>) -> vec3<f32> {
@@ -82,7 +84,7 @@ const EXPOSURE: f32 = 0.3;
     let ndc = vec2((frag.x / f32(size.x)) * 2.0 - 1.0, 1.0 - (frag.y / f32(size.y)) * 2.0);
     let p4 = params.inverse_view_proj * vec4(ndc, 1.0, 1.0);
     let dir = normalize(p4.xyz / p4.w);
-    var col = max(fogged(sum / weight * EXPOSURE, a.x, dir), vec3(0.0));
+    var col = max(fogged(sum / weight * textureLoad(albedo, px, 0).rgb * EXPOSURE, a.x, dir), vec3(0.0));
     if SHOULDER > 0.5 {
         // Soft shoulder: linear up to the knee, then easing into 1.
         let k = 0.5;
