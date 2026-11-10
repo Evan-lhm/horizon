@@ -869,7 +869,8 @@ fn celestial(sun_angle_degrees: f32) -> (Vec3, [f32; 4], f32) {
     let day = smoothstep(-0.12, 0.15, sun.y);
     // Warmer near the horizon.
     let low = 1.0 - smoothstep(0.0, 0.45, sun.y);
-    let sun_color = Vec3::new(1.0, 0.93 - 0.25 * low, 0.82 - 0.45 * low) * day;
+    // x3: with EXPOSURE 0.3 a sunlit top face lands near vanilla brightness.
+    let sun_color = Vec3::new(1.0, 0.93 - 0.25 * low, 0.82 - 0.45 * low) * (3.0 * day);
     let (dir, color) = if day > 0.02 {
         (sun, sun_color)
     } else {
