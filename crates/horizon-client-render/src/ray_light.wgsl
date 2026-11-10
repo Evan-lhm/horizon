@@ -26,10 +26,26 @@ struct Params {
     prev_camera: vec4<f32>,
     // x, y: the horizontal distance the lighting fades out over; z: how far rays go.
     fade: vec4<f32>,
+    // The fog's colour (linear) and strength.
+    fog_color: vec4<f32>,
+    // The fog's start and end: spherical, then cylindrical.
+    fog: vec4<f32>,
 }
 @group(0) @binding(0) var tlas: acceleration_structure;
 @group(0) @binding(1) var depth: texture_depth_2d;
 @group(0) @binding(2) var<uniform> params: Params;
+
+// terrain.wgsl's `apply_fog` on linear light, for a point `dist` away along unit `dir`.
+fn fogged(col: vec3<f32>, dist: f32, dir: vec3<f32>) -> vec3<f32> {
+    let cyl = dist * max(length(dir.xz), abs(dir.y));
+    let f = max(linear_fog(dist, params.fog.x, params.fog.y), linear_fog(cyl, params.fog.z, params.fog.w));
+    return mix(col, params.fog_color.rgb, f * params.fog_color.a);
+}
+fn linear_fog(d: f32, start: f32, end: f32) -> f32 {
+    if d <= start { return 0.0; }
+    if d >= end { return 1.0; }
+    return (d - start) / (end - start);
+}
 // Every traced section's quads as `TerrainVertex` (six words: position, UV's two u16, layer and
 // light, RGBA8 colour); a TLAS instance's custom data is its section's first quad.
 @group(0) @binding(3) var<storage, read> store: array<u32>;
@@ -388,7 +404,7 @@ fn seen(s: Surf) -> vec3<f32> {
     }
     // Schlick's Fresnel for water, with a floor so it reads from above as well.
     let fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(-v, n), 0.0), 5.0);
-    var out = max(col, vec3(0.0));
+    var out = max(fogged(col, length(p), v), vec3(0.0));
     if ENCODE > 0.5 { out = pow(out, vec3(1.0 / 2.2)); }
     return vec4(out, clamp(0.3 + 0.7 * fresnel, 0.0, 1.0));
 }

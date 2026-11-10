@@ -77,6 +77,7 @@ impl Renderer {
                     camera,
                     sky,
                     [frame.sky.sky_color, frame.sky.fog_color],
+                    fog(frame),
                 );
             });
         }
@@ -585,6 +586,33 @@ fn instance_origin(key: SectionKey, min_y: i32, anchor: (i32, i32)) -> [f32; 3] 
         (min_y + key.1 * 16) as f32,
         ((key.2 - anchor.1) * 16) as f32,
     ]
+}
+
+/// The fog colour and its start/end distances, as the `Globals` uniform gets them (the terrain
+/// shader's `globals.fog_color` and `globals.fog`).
+fn fog(frame: &crate::gfx::Frame<'_>) -> ([f32; 4], [f32; 4]) {
+    if let Some(f) = frame.fog {
+        (
+            f.color,
+            [
+                f.environmental_start,
+                f.environmental_end,
+                f.render_distance_start,
+                f.render_distance_end,
+            ],
+        )
+    } else if frame.underwater {
+        let [r, g, b] = [0, 1, 2].map(|i| frame.water_fog[i]);
+        ([r, g, b, 1.0], [-8.0, 96.0, -8.0, 96.0])
+    } else {
+        let d = frame.distance;
+        let [r, g, b] = [0, 1, 2].map(|i| frame.sky.fog_color[i]);
+        let (start, end) = frame.environment_fog.unwrap_or((f32::MAX, f32::MAX));
+        (
+            [r, g, b, 1.0],
+            [start, end, (d - d.min(64.0) * 0.25).max(0.0), d],
+        )
+    }
 }
 
 #[cfg(test)]

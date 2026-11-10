@@ -30,6 +30,10 @@ struct Params {
     camera: [f32; 4],
     prev_camera: [f32; 4],
     fade: [f32; 4],
+    /// Vanilla's fog colour in linear light, and its strength.
+    fog_color: [f32; 4],
+    /// The fog's start and end: spherical, then cylindrical (terrain.wgsl's `globals.fog`).
+    fog: [f32; 4],
 }
 
 /// The frames' history, two of each to read last frame's while writing this one's.
@@ -195,6 +199,7 @@ impl RayLight {
         camera: DVec3,
         sky: bool,
         colors: [[f32; 3]; 2],
+        (fog_color, fog): ([f32; 4], [f32; 4]),
     ) {
         self.armed = false;
         let Some(anchor) = anchor.filter(|_| sky) else {
@@ -222,6 +227,11 @@ impl RayLight {
             camera: [cam.x, cam.y, cam.z, (self.frame % 65536) as f32],
             prev_camera: prev.map_or([0.0; 4], |p| [p.1.x, p.1.y, p.1.z, 1.0]),
             fade: fade(reach),
+            fog_color: {
+                let c = Vec3::new(fog_color[0], fog_color[1], fog_color[2]).powf(2.2);
+                [c.x, c.y, c.z, fog_color[3]]
+            },
+            fog,
         };
         queue.write_buffer(&self.params, 0, bytemuck::bytes_of(&params));
         self.prev = Some((clip, cam, anchor));
@@ -313,6 +323,10 @@ impl RayLight {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::TextureView(&t.aux[cur]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.params.as_entire_binding(),
                 },
             ],
         });
