@@ -86,10 +86,14 @@ const EXPOSURE: f32 = 0.3;
     let dir = normalize(p4.xyz / p4.w);
     var col = max(fogged(sum / weight * textureLoad(albedo, px, 0).rgb * EXPOSURE, a.x, dir), vec3(0.0));
     if SHOULDER > 0.5 {
-        // Soft shoulder: linear up to the knee, then easing into 1.
-        let k = 0.5;
-        let d = max(col - k, vec3(0.0)) / (1.0 - k);
-        col = min(col, vec3(k)) + (1.0 - k) * d / (1.0 + d);
+        // Soft shoulder on the brightest channel, the hue kept: per channel it would grey
+        // bright colours (sunlit sand, grass). Linear up to the knee, then easing into 1.
+        let k = 0.75;
+        let m = max(col.r, max(col.g, col.b));
+        if m > k {
+            let d = (m - k) / (1.0 - k);
+            col *= (k + (1.0 - k) * d / (1.0 + d)) / m;
+        }
     }
     if ENCODE > 0.5 { col = pow(col, vec3(1.0 / 2.2)); }
     return vec4(col, a.y);

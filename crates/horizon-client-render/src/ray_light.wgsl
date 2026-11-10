@@ -175,6 +175,17 @@ fn trace_ray(origin: vec3<f32>, dir: vec3<f32>, far: f32, closest: bool) -> RayI
     return rayQueryGetCommittedIntersection(&rq);
 }
 
+// The closest face between `tmin` and `tmax`, cut-out texels included: the camera ray, kept to
+// the slab around the raster's depth.
+fn trace_window(origin: vec3<f32>, dir: vec3<f32>, tmin: f32, tmax: f32) -> RayIntersection {
+    var rq: ray_query;
+    rayQueryInitialize(&rq, tlas, RayDesc(RAY_FLAG_NONE, 0xffu, tmin, tmax, origin, dir));
+    while rayQueryProceed(&rq) {
+        rayQueryConfirmIntersection(&rq);
+    }
+    return rayQueryGetCommittedIntersection(&rq);
+}
+
 fn linear(c: vec3<f32>) -> vec3<f32> {
     return select(pow(c, vec3(2.2)), c, SRGB_SPRITES > 0.5);
 }
@@ -307,20 +318,18 @@ struct Out {
     seed = (u32(px.x) * 1973u + u32(px.y) * 9277u + u32(params.camera.w) * 26699u) | 1u;
     let cam = params.camera.xyz;
     var dir = p / dist;
-    // From the near plane on: a vine or leaf quad the camera stands in isn't drawn either.
-    var eye = cam + dir * NEAR;
-    var h = trace_ray(eye, dir, dist * 1.03 + 0.3, true);
-    if h.kind == RAY_QUERY_INTERSECTION_NONE || abs(h.t + NEAR - dist) > 0.02 * dist + 0.1 {
+    // Only around the depth the raster drew: the face it shows wins, even where the ray's
+    // alpha test would see through a leaf, and a vine at the eye is skipped.
+    let slack = 0.02 * dist + 0.1;
+    var h = trace_window(cam, dir, max(dist - slack, NEAR), dist + slack);
+    if h.kind == RAY_QUERY_INTERSECTION_NONE {
         // A ray that slips through the seam between two triangles would leave a line of
         // vanilla's light along it: once more, a fraction of a pixel aside.
         dir = normalize(p + vec3(0.0007, 0.0005, -0.0006) * dist);
-        eye = cam + dir * NEAR;
-        h = trace_ray(eye, dir, dist * 1.03 + 0.3, true);
-        if h.kind == RAY_QUERY_INTERSECTION_NONE || abs(h.t + NEAR - dist) > 0.02 * dist + 0.1 {
-            return none;
-        }
+        h = trace_window(cam, dir, max(dist - slack, NEAR), dist + slack);
+        if h.kind == RAY_QUERY_INTERSECTION_NONE { return none; }
     }
-    let s = surface(h, eye, dir);
+    let s = surface(h, cam, dir);
     let x = s.p + s.n * (0.002 + dist * 0.0004);
     var light = direct(x, s.ln) + block_glow(s.block);
     // One bounce: the sky, or the sun, sky and emission on the face the ray meets.
