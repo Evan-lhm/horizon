@@ -39,7 +39,9 @@ struct Params {
 fn fogged(col: vec3<f32>, dist: f32, dir: vec3<f32>) -> vec3<f32> {
     let cyl = dist * max(length(dir.xz), abs(dir.y));
     let f = max(linear_fog(dist, params.fog.x, params.fog.y), linear_fog(cyl, params.fog.z, params.fog.w));
-    return mix(col, params.fog_color.rgb, f * params.fog_color.a);
+    // Mix in gamma space like vanilla's `apply_fog` (a linear mix greys out dark backlit terrain); HDR stays unclamped.
+    let g = vec3<f32>(1.0 / 2.2);
+    return pow(mix(pow(max(col, vec3<f32>(0.0)), g), pow(params.fog_color.rgb, g), f * params.fog_color.a), vec3<f32>(2.2));
 }
 fn linear_fog(d: f32, start: f32, end: f32) -> f32 {
     if d <= start { return 0.0; }
@@ -71,7 +73,7 @@ override ENCODE: f32 = 0.0;
 // ray_light_blend.wgsl's.
 const EXPOSURE: f32 = 0.3;
 // How much sunlight the air scatters per block (`fs_volume`).
-const HAZE: f32 = 0.05;
+const HAZE: f32 = 0.08;
 // 1 when the sprites are sRGB textures (read back linear), 0 when they hold sRGB values as is.
 override SRGB_SPRITES: f32 = 1.0;
 // terrain.wgsl's `UV_STEPS`.
@@ -237,7 +239,8 @@ fn cone_dir(d: vec3<f32>, angle: f32) -> vec3<f32> {
 fn sky_radiance(d: vec3<f32>) -> vec3<f32> {
     // Vanilla's night sky is near black, so add a bluish ambient that fades out by day.
     let night = (1.0 - params.sky.w) * vec3(0.08, 0.13, 0.27);
-    let zenith = params.sky.rgb * 0.6 + night;
+    // The open sky overhead lights shadows bluer than the hazy horizon does.
+    let zenith = params.sky.rgb * 0.9 + night;
     let horizon = params.horizon.rgb * 0.6 + night;
     if d.y < 0.0 { return horizon * 0.3; }
     return mix(horizon, zenith, sqrt(d.y));
@@ -439,6 +442,9 @@ fn seen(s: Surf) -> vec3<f32> {
             open += dt;
         }
     }
+    // Only a ray that is part in light, part in shadow shows a shaft: open air stays clear.
+    let lit = open / max(far, 0.001);
+    open = far * 4.0 * lit * (1.0 - lit);
     // Henyey-Greenstein: a forward-scattering haze.
     let g = 0.6;
     let mu = dot(dir, params.light_dir.xyz);

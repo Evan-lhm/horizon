@@ -34,7 +34,9 @@ struct Params {
 fn fogged(col: vec3<f32>, dist: f32, dir: vec3<f32>) -> vec3<f32> {
     let cyl = dist * max(length(dir.xz), abs(dir.y));
     let f = max(linear_fog(dist, params.fog.x, params.fog.y), linear_fog(cyl, params.fog.z, params.fog.w));
-    return mix(col, params.fog_color.rgb, f * params.fog_color.a);
+    // Mix in gamma space like vanilla's `apply_fog` (a linear mix greys out dark backlit terrain); HDR stays unclamped.
+    let g = vec3<f32>(1.0 / 2.2);
+    return pow(mix(pow(max(col, vec3<f32>(0.0)), g), pow(params.fog_color.rgb, g), f * params.fog_color.a), vec3<f32>(2.2));
 }
 fn linear_fog(d: f32, start: f32, end: f32) -> f32 {
     if d <= start { return 0.0; }
