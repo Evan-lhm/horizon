@@ -426,7 +426,8 @@ impl RayLight {
         let (Some(t), Some((_, pipelines))) = (&self.targets, &self.reflect) else {
             return;
         };
-        let group = self.group(device, t, tlas, store, depth, sprites, self.current);
+        // `draw` flipped `current`: this frame's trace, for `fs_volume`'s accumulated shafts.
+        let group = self.group(device, t, tlas, store, depth, sprites, 1 - self.current);
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Ray-traced reflections"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {

@@ -74,7 +74,7 @@ override ENCODE: f32 = 0.0;
 // ray_light_blend.wgsl's.
 const EXPOSURE: f32 = 0.3;
 // How much sunlight the air scatters per block (`fs_volume`).
-const HAZE: f32 = 0.11;
+const HAZE: f32 = 0.22;
 // 1 when the sprites are sRGB textures (read back linear), 0 when they hold sRGB values as is.
 override SRGB_SPRITES: f32 = 1.0;
 // terrain.wgsl's `UV_STEPS`.
@@ -194,6 +194,26 @@ fn facing(n: vec3<f32>) -> f32 {
     return select(6.0, 5.0, n.z > 0.0);
 }
 
+// How far shafts reach from the camera.
+const SHAFT_REACH: f32 = 32.0;
+
+// How much of the camera ray's first `SHAFT_REACH` blocks the sun reaches, in blocks: eight
+// jittered samples, which the history averages.
+fn sunlit_air(cam: vec3<f32>, dir: vec3<f32>, dist: f32) -> f32 {
+    if params.sky.w <= 0.02 { return 0.0; }
+    let dt = min(dist, SHAFT_REACH) / 8.0;
+    let j = rand();
+    var open = 0.0;
+    for (var i = 0; i < 8; i++) {
+        let q = cam + dir * ((f32(i) + j) * dt);
+        if trace_ray(q, params.light_dir.xyz, params.fade.z, false).kind
+            == RAY_QUERY_INTERSECTION_NONE {
+            open += dt;
+        }
+    }
+    return open;
+}
+
 fn linear(c: vec3<f32>) -> vec3<f32> {
     return select(pow(c, vec3(2.2)), c, SRGB_SPRITES > 0.5);
 }
@@ -304,8 +324,9 @@ fn untone(c: vec3<f32>) -> vec3<f32> {
 struct Out {
     // Linear light, and the samples it averages (0: vanilla's lighting stays).
     @location(0) color: vec4<f32>,
-    // The point's distance from the camera, how much the traced light shows, and which way its
-    // face looks (`facing`), so the history never takes another face's light.
+    // The point's distance from the camera, how much the traced light shows, which way its face
+    // looks (`facing`, so the history never takes another face's light), and the sunlit length
+    // of air in front of it (`sunlit_air`).
     @location(1) aux: vec4<f32>,
     // This frame's albedo, no history: `color` is light divided by it, so the texture stays crisp.
     @location(2) albedo: vec4<f32>,
@@ -379,6 +400,9 @@ struct Out {
     // The history at this point last frame, unless it was another surface then.
     var count = 1.0;
     var out = col;
+    // Sunlit air along the camera ray, a few samples a frame averaged with the history like the
+    // light: `fs_volume` turns it into shafts.
+    var air = sunlit_air(cam, dir, dist);
     let prev = params.prev_clip * vec4(s.p, 1.0);
     if params.prev_camera.w > 0.0 && prev.w > 0.0 {
         let pn = prev.xy / prev.w;
@@ -394,10 +418,11 @@ struct Out {
                 count = min(hc.a + 1.0, max(MAX_HISTORY / (1.0 + 0.5 * moved), 6.0));
                 // Tone-weighted (docs/hdr-passes.md, rule 3), so a few bright samples don't win.
                 out = untone(mix(tone(max(hc.rgb, vec3(0.0))), tone(col), 1.0 / count));
+                air = mix(ha.w, air, 1.0 / count);
             }
         }
     }
-    return Out(vec4(out, count), vec4(length(s.p - cam), fade, facing(s.n), 0.0), vec4(albedo, 1.0));
+    return Out(vec4(out, count), vec4(length(s.p - cam), fade, facing(s.n), air), vec4(albedo, 1.0));
 }
 
 // What a reflected ray sees of face `s`: its sun, sky and block light, without a bounce.
@@ -464,33 +489,33 @@ fn seen(s: Surf) -> vec3<f32> {
 // jittered per pixel and frame).
 @fragment fn fs_volume(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     if params.sky.w <= 0.02 { return vec4(0.0); }
-    let size = vec2<f32>(textureDimensions(depth));
+    let size = vec2<i32>(textureDimensions(depth));
     let px = vec2<i32>(frag.xy);
-    // Reversed depth: the sky, 0, marches as far as the traced area goes.
-    let d = max(textureLoad(depth, px, 0), 0.0000001);
-    let ndc = vec2((frag.x / size.x) * 2.0 - 1.0, 1.0 - (frag.y / size.y) * 2.0);
+    let d = textureLoad(depth, px, 0);
+    // The sky: no backdrop to show a beam against.
+    if d <= 0.0 { return vec4(0.0); }
+    // This frame's accumulated sunlit air (`fs_trace`), smoothed over neighbours at about the
+    // same distance.
+    let a = textureLoad(hist_aux, px, 0);
+    if a.y <= 0.0 { return vec4(0.0); }
+    var sum = a.w;
+    var weight = 1.0;
+    for (var y = -2; y <= 2; y++) {
+        for (var x = -2; x <= 2; x++) {
+            if x == 0 && y == 0 { continue; }
+            let n = textureLoad(hist_aux, clamp(px + vec2(x, y) * 2, vec2(0), size - 1), 0);
+            if n.y <= 0.0 { continue; }
+            let w = exp(-abs(n.x - a.x) / (0.05 * a.x + 0.2));
+            sum += n.w * w;
+            weight += w;
+        }
+    }
+    let ndc = vec2((frag.x / f32(size.x)) * 2.0 - 1.0, 1.0 - (frag.y / f32(size.y)) * 2.0);
     let p4 = params.inverse_view_proj * vec4(ndc, d, 1.0);
     let p = p4.xyz / p4.w;
     let dir = normalize(p);
-    // The nearest 32 blocks: beams in a room or a forest, without veiling the distance.
-    let far = min(length(p), 32.0);
-    // Interleaved gradient noise, moved each frame.
-    let jitter = fract(52.9829189 * fract(dot(frag.xy, vec2(0.06711056, 0.00583715))
-        + params.camera.w * 0.618034));
-    let dt = far / 24.0;
-    var open = 0.0;
-    // Whether the far end of the march, the backdrop, is sunlit.
-    var last = 0.0;
-    for (var i = 0; i < 24; i++) {
-        let q = params.camera.xyz + dir * ((f32(i) + jitter) * dt);
-        if trace_ray(q, params.light_dir.xyz, params.fade.z, false).kind
-            == RAY_QUERY_INTERSECTION_NONE {
-            open += dt;
-            last = 1.0;
-        } else {
-            last = 0.0;
-        }
-    }
+    let far = min(length(p), SHAFT_REACH);
+    var open = sum / weight;
     // A shaft is the lit part of a ray that also crosses shadow: open air stays clear.
     let lit = open / max(far, 0.001);
     open *= smoothstep(0.0, 0.35, 1.0 - lit);
@@ -498,9 +523,10 @@ fn seen(s: Surf) -> vec3<f32> {
     let g = 0.6;
     let mu = dot(dir, params.light_dir.xyz);
     let phase = (1.0 - g * g) / (4.0 * PI * pow(1.0 + g * g - 2.0 * g * mu, 1.5));
-    // Beams show against shade: faint over sunlit ground, none over the sky.
-    let air = select(mix(1.0, 0.25, last), 0.0, textureLoad(depth, px, 0) <= 0.0);
-    var out = params.light_color.rgb * phase * HAZE * open * EXPOSURE * params.sky.w * air;
+    // Beams show against shade: faint over a sunlit backdrop.
+    let backdrop = trace_ray(params.camera.xyz + p * 0.999, params.light_dir.xyz, params.fade.z, false);
+    let shade = select(0.25, 1.0, backdrop.kind != RAY_QUERY_INTERSECTION_NONE);
+    var out = params.light_color.rgb * phase * HAZE * open * EXPOSURE * params.sky.w * shade * a.y;
     if ENCODE > 0.5 { out = pow(out, vec3(1.0 / 2.2)) * 0.5; }
     return vec4(max(out, vec3(0.0)), 0.0);
 }
