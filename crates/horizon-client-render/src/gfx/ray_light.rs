@@ -43,6 +43,8 @@ struct Targets {
     format: wgpu::TextureFormat,
     color: [wgpu::TextureView; 2],
     aux: [wgpu::TextureView; 2],
+    /// The bloom's quarter-resolution targets.
+    bloom: [wgpu::TextureView; 2],
     /// The world's depth with only its opaque part: the reflections tell water by it.
     opaque: (wgpu::Texture, wgpu::TextureView),
 }
@@ -58,6 +60,10 @@ pub(in crate::gfx) struct RayLight {
     composite: Option<(wgpu::TextureFormat, wgpu::RenderPipeline)>,
     /// Water's reflections and the light shafts, for the world's format and the sprites' split.
     reflect: Option<((wgpu::TextureFormat, u32), [wgpu::RenderPipeline; 2])>,
+    /// The bloom's bright pass, two blurs and composite, for the world's format.
+    bloom: Option<(wgpu::TextureFormat, [wgpu::RenderPipeline; 4])>,
+    bloom_layout: wgpu::BindGroupLayout,
+    sampler: wgpu::Sampler,
     targets: Option<Targets>,
     /// Which of the two targets this frame writes.
     current: usize,
@@ -154,6 +160,29 @@ impl RayLight {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let bloom_tex = |binding, filterable| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        };
+        let bloom_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Ray-traced bloom"),
+            entries: &[
+                bloom_tex(0, true),
+                bloom_tex(1, false),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
         Self {
             layout,
             pipeline_layout,
@@ -163,6 +192,13 @@ impl RayLight {
             trace: None,
             composite: None,
             reflect: None,
+            bloom: None,
+            bloom_layout,
+            sampler: device.create_sampler(&wgpu::SamplerDescriptor {
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                ..Default::default()
+            }),
             targets: None,
             current: 0,
             frame: 0,
@@ -398,6 +434,125 @@ impl RayLight {
             pass.set_pipeline(pipeline);
             pass.draw(0..3, 0..1);
         }
+        drop(pass);
+        self.bloom(device, encoder, color);
+    }
+
+    /// A glow around the light this frame traced above the threshold, added over `color`.
+    fn bloom(
+        &mut self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        color: &wgpu::TextureView,
+    ) {
+        let format = color.texture().format();
+        if self.bloom.as_ref().is_none_or(|(f, _)| *f != format) {
+            self.bloom = Some((format, self.bloom_pipelines(device, format)));
+        }
+        let (Some(t), Some((_, pipelines))) = (&self.targets, &self.bloom) else {
+            return;
+        };
+        // `draw` wrote the other one and flipped `current`.
+        let fresh = 1 - self.current;
+        let group = |src| {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Ray-traced bloom"),
+                layout: &self.bloom_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(src),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&t.aux[fresh]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                ],
+            })
+        };
+        let clear = wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT);
+        let steps = [
+            (&t.color[fresh], &t.bloom[0], clear),
+            (&t.bloom[0], &t.bloom[1], clear),
+            (&t.bloom[1], &t.bloom[0], clear),
+            (&t.bloom[0], color, wgpu::LoadOp::Load),
+        ];
+        for ((src, target, load), pipeline) in steps.into_iter().zip(pipelines) {
+            let group = group(src);
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Ray-traced bloom"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: target,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+            pass.set_pipeline(pipeline);
+            pass.set_bind_group(0, &group, &[]);
+            pass.draw(0..3, 0..1);
+        }
+    }
+
+    fn bloom_pipelines(
+        &self,
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+    ) -> [wgpu::RenderPipeline; 4] {
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Ray-traced bloom"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../ray_bloom.wgsl").into()),
+        });
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Ray-traced bloom"),
+            bind_group_layouts: &[Some(&self.bloom_layout)],
+            immediate_size: 0,
+        });
+        let constants = [("ENCODE", if encodes(format) { 1.0 } else { 0.0 })];
+        let make = |entry, format, blend| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Ray-traced bloom"),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module: &module,
+                    entry_point: Some("vs_main"),
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &module,
+                    entry_point: Some(entry),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &constants,
+                        ..Default::default()
+                    },
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format,
+                        blend,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                primitive: Default::default(),
+                depth_stencil: None,
+                multisample: Default::default(),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
+        [
+            make("fs_bright", HISTORY, None),
+            make("fs_blur_h", HISTORY, None),
+            make("fs_blur_v", HISTORY, None),
+            make("fs_add", format, Some(ADD)),
+        ]
     }
 
     /// The bind group for `depth`, last frame's history (`history`) and this frame's opaque
@@ -603,7 +758,7 @@ fn targets(
     format: wgpu::TextureFormat,
     depth: wgpu::TextureFormat,
 ) -> Targets {
-    let make = |format| {
+    let make = |format, size: [u32; 2]| {
         device
             .create_texture(&wgpu::TextureDescriptor {
                 label: Some("Ray-traced light history"),
@@ -622,6 +777,7 @@ fn targets(
             })
             .create_view(&Default::default())
     };
+    let quarter = size.map(|n| n.div_ceil(4).max(1));
     let opaque = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("Ray-traced light, opaque depth"),
         size: wgpu::Extent3d {
@@ -640,8 +796,9 @@ fn targets(
     Targets {
         size,
         format,
-        color: [make(HISTORY), make(HISTORY)],
-        aux: [make(AUX), make(AUX)],
+        color: [make(HISTORY, size), make(HISTORY, size)],
+        aux: [make(AUX, size), make(AUX, size)],
+        bloom: [make(HISTORY, quarter), make(HISTORY, quarter)],
         opaque: (opaque, view),
     }
 }
@@ -738,6 +895,7 @@ mod tests {
         for source in [
             include_str!("../ray_light.wgsl"),
             include_str!("../ray_light_blend.wgsl"),
+            include_str!("../ray_bloom.wgsl"),
         ] {
             let module = naga::front::wgsl::parse_str(source).unwrap();
             naga::valid::Validator::new(
