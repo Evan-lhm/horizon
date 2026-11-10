@@ -74,7 +74,7 @@ override ENCODE: f32 = 0.0;
 // ray_light_blend.wgsl's.
 const EXPOSURE: f32 = 0.3;
 // How much sunlight the air scatters per block (`fs_volume`).
-const HAZE: f32 = 0.08;
+const HAZE: f32 = 0.11;
 // 1 when the sprites are sRGB textures (read back linear), 0 when they hold sRGB values as is.
 override SRGB_SPRITES: f32 = 1.0;
 // terrain.wgsl's `UV_STEPS`.
@@ -420,7 +420,7 @@ fn seen(s: Surf) -> vec3<f32> {
 
 // Sunlight the air scatters towards the camera, through the traced shadows: shafts between
 // trees, through windows and over ridges. Added over the finished world after translucent
-// terrain, along the camera ray as far as the traced area holds (16 shadow rays, their start
+// terrain, along the camera ray as far as the traced area holds (24 shadow rays, their start
 // jittered per pixel and frame).
 @fragment fn fs_volume(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
     if params.sky.w <= 0.02 { return vec4(0.0); }
@@ -437,24 +437,29 @@ fn seen(s: Surf) -> vec3<f32> {
     // Interleaved gradient noise, moved each frame.
     let jitter = fract(52.9829189 * fract(dot(frag.xy, vec2(0.06711056, 0.00583715))
         + params.camera.w * 0.618034));
-    let dt = far / 16.0;
+    let dt = far / 24.0;
     var open = 0.0;
-    for (var i = 0; i < 16; i++) {
+    // Whether the far end of the march, the backdrop, is sunlit.
+    var last = 0.0;
+    for (var i = 0; i < 24; i++) {
         let q = params.camera.xyz + dir * ((f32(i) + jitter) * dt);
         if trace_ray(q, params.light_dir.xyz, params.fade.z, false).kind
             == RAY_QUERY_INTERSECTION_NONE {
             open += dt;
+            last = 1.0;
+        } else {
+            last = 0.0;
         }
     }
-    // Only a ray that is part in light, part in shadow shows a shaft: open air stays clear.
+    // A shaft is the lit part of a ray that also crosses shadow: open air stays clear.
     let lit = open / max(far, 0.001);
-    open = far * 4.0 * lit * (1.0 - lit);
+    open *= smoothstep(0.0, 0.35, 1.0 - lit);
     // Henyey-Greenstein: a forward-scattering haze.
     let g = 0.6;
     let mu = dot(dir, params.light_dir.xyz);
     let phase = (1.0 - g * g) / (4.0 * PI * pow(1.0 + g * g - 2.0 * g * mu, 1.5));
-    // Over the sky only a faint glow: the beams belong in front of the world.
-    let air = select(1.0, 0.2, textureLoad(depth, px, 0) <= 0.0);
+    // Beams show against shade: faint over sunlit ground, none over the sky.
+    let air = select(mix(1.0, 0.25, last), 0.0, textureLoad(depth, px, 0) <= 0.0);
     var out = params.light_color.rgb * phase * HAZE * open * EXPOSURE * params.sky.w * air;
     if ENCODE > 0.5 { out = pow(out, vec3(1.0 / 2.2)) * 0.5; }
     return vec4(max(out, vec3(0.0)), 0.0);
