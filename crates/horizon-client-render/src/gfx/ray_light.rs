@@ -52,7 +52,8 @@ pub(in crate::gfx) struct RayLight {
     materials: wgpu::Buffer,
     trace: Option<(u32, wgpu::RenderPipeline)>,
     composite: Option<(wgpu::TextureFormat, wgpu::RenderPipeline)>,
-    reflect: Option<((wgpu::TextureFormat, u32), wgpu::RenderPipeline)>,
+    /// Water's reflections and the light shafts, for the world's format and the sprites' split.
+    reflect: Option<((wgpu::TextureFormat, u32), [wgpu::RenderPipeline; 2])>,
     targets: Option<Targets>,
     /// Which of the two targets this frame writes.
     current: usize,
@@ -355,9 +356,13 @@ impl RayLight {
         let key = (color.texture().format(), split);
         if self.reflect.as_ref().is_none_or(|(k, _)| *k != key) {
             let srgb = sprites[0].texture().format().is_srgb();
-            self.reflect = Some((key, self.reflect_pipeline(device, key.0, split, srgb)));
+            let pipelines = [
+                self.reflect_pipeline(device, key.0, split, srgb, "fs_reflect", OVER),
+                self.reflect_pipeline(device, key.0, split, srgb, "fs_volume", ADD),
+            ];
+            self.reflect = Some((key, pipelines));
         }
-        let (Some(t), Some((_, pipeline))) = (&self.targets, &self.reflect) else {
+        let (Some(t), Some((_, pipelines))) = (&self.targets, &self.reflect) else {
             return;
         };
         let group = self.group(device, t, tlas, store, depth, sprites, self.current);
@@ -374,9 +379,11 @@ impl RayLight {
             })],
             ..Default::default()
         });
-        pass.set_pipeline(pipeline);
         pass.set_bind_group(0, &group, &[]);
-        pass.draw(0..3, 0..1);
+        for pipeline in pipelines {
+            pass.set_pipeline(pipeline);
+            pass.draw(0..3, 0..1);
+        }
     }
 
     /// The bind group for `depth`, last frame's history (`history`) and this frame's opaque
@@ -446,6 +453,8 @@ impl RayLight {
         format: wgpu::TextureFormat,
         split: u32,
         srgb: bool,
+        entry: &str,
+        blend: wgpu::BlendState,
     ) -> wgpu::RenderPipeline {
         let constants = [
             ("SPRITE_SPLIT", f64::from(split)),
@@ -463,14 +472,14 @@ impl RayLight {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &self.module,
-                entry_point: Some("fs_reflect"),
+                entry_point: Some(entry),
                 compilation_options: wgpu::PipelineCompilationOptions {
                     constants: &constants,
                     ..Default::default()
                 },
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
-                    blend: Some(OVER),
+                    blend: Some(blend),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -628,6 +637,20 @@ const OVER: wgpu::BlendState = wgpu::BlendState {
     color: wgpu::BlendComponent {
         src_factor: wgpu::BlendFactor::SrcAlpha,
         dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+        operation: wgpu::BlendOperation::Add,
+    },
+    alpha: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::Zero,
+        dst_factor: wgpu::BlendFactor::One,
+        operation: wgpu::BlendOperation::Add,
+    },
+};
+
+/// Added to the world's colour, keeping its alpha.
+const ADD: wgpu::BlendState = wgpu::BlendState {
+    color: wgpu::BlendComponent {
+        src_factor: wgpu::BlendFactor::One,
+        dst_factor: wgpu::BlendFactor::One,
         operation: wgpu::BlendOperation::Add,
     },
     alpha: wgpu::BlendComponent {

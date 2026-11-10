@@ -54,6 +54,8 @@ override SPRITE_SPLIT: u32 = 2048u;
 override ENCODE: f32 = 0.0;
 // ray_light_blend.wgsl's.
 const EXPOSURE: f32 = 0.4;
+// How much sunlight the air scatters per block (`fs_volume`).
+const HAZE: f32 = 0.003;
 // 1 when the sprites are sRGB textures (read back linear), 0 when they hold sRGB values as is.
 override SRGB_SPRITES: f32 = 1.0;
 // terrain.wgsl's `UV_STEPS`.
@@ -299,14 +301,16 @@ struct Out {
         let rp = normalize(r + s.rough * s.rough * random_unit_vector());
         if dot(rp, s.n) > 0.0 { r = rp; }
         let sh = trace_ray(x, r, params.fade.z, true);
-        var spec = sky_radiance(r)
+        // The sky as vanilla colours it, in the traced light's units.
+        var spec = mix(params.horizon.rgb, params.sky.rgb, sqrt(max(r.y, 0.0))) / EXPOSURE
             + params.light_color.rgb * pow(max(dot(r, params.light_dir.xyz), 0.0), 800.0) * 20.0;
         if sh.kind != RAY_QUERY_INTERSECTION_NONE { spec = seen(surface(sh, x, r)); }
         let c = max(dot(-dir, s.n), 0.0);
         let f0 = mix(vec3(0.04), s.albedo, s.metal);
         let fr = f0 + (vec3(1.0) - f0) * pow(1.0 - c, 5.0);
+        // Metal keeps a little of its block light diffusely, so torches warm it at night.
         col = s.albedo * light * (vec3(1.0) - fr) * (1.0 - s.metal) + spec * fr
-            + s.albedo * s.emission;
+            + s.albedo * (s.emission + block_glow(s.block) * s.metal * 0.5);
     }
     col = min(col, vec3(16.0));
     // The history at this point last frame, unless it was another surface then.
@@ -387,4 +391,40 @@ fn seen(s: Surf) -> vec3<f32> {
     var out = max(col, vec3(0.0));
     if ENCODE > 0.5 { out = pow(out, vec3(1.0 / 2.2)); }
     return vec4(out, clamp(0.3 + 0.7 * fresnel, 0.0, 1.0));
+}
+
+// Sunlight the air scatters towards the camera, through the traced shadows: shafts between
+// trees, through windows and over ridges. Added over the finished world after translucent
+// terrain, along the camera ray as far as the traced area holds (16 shadow rays, their start
+// jittered per pixel and frame).
+@fragment fn fs_volume(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
+    if params.sky.w <= 0.02 { return vec4(0.0); }
+    let size = vec2<f32>(textureDimensions(depth));
+    let px = vec2<i32>(frag.xy);
+    // Reversed depth: the sky, 0, marches as far as the traced area goes.
+    let d = max(textureLoad(depth, px, 0), 0.0000001);
+    let ndc = vec2((frag.x / size.x) * 2.0 - 1.0, 1.0 - (frag.y / size.y) * 2.0);
+    let p4 = params.inverse_view_proj * vec4(ndc, d, 1.0);
+    let p = p4.xyz / p4.w;
+    let dir = normalize(p);
+    let far = min(length(p), params.fade.y * 0.75);
+    // Interleaved gradient noise, moved each frame.
+    let jitter = fract(52.9829189 * fract(dot(frag.xy, vec2(0.06711056, 0.00583715))
+        + params.camera.w * 0.618034));
+    let dt = far / 16.0;
+    var open = 0.0;
+    for (var i = 0; i < 16; i++) {
+        let q = params.camera.xyz + dir * ((f32(i) + jitter) * dt);
+        if trace_ray(q, params.light_dir.xyz, params.fade.z, false).kind
+            == RAY_QUERY_INTERSECTION_NONE {
+            open += dt;
+        }
+    }
+    // Henyey-Greenstein: a forward-scattering haze.
+    let g = 0.7;
+    let mu = dot(dir, params.light_dir.xyz);
+    let phase = (1.0 - g * g) / (4.0 * PI * pow(1.0 + g * g - 2.0 * g * mu, 1.5));
+    var out = params.light_color.rgb * phase * HAZE * open * EXPOSURE * params.sky.w;
+    if ENCODE > 0.5 { out = pow(out, vec3(1.0 / 2.2)) * 0.5; }
+    return vec4(max(out, vec3(0.0)), 0.0);
 }
