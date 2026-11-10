@@ -84,6 +84,8 @@ const OPAQUE_LAYER: u32 = 0x8000u;
 // Samples the history averages at most: about a second of a still view.
 const MAX_HISTORY: f32 = 64.0;
 const PI: f32 = 3.14159265;
+// The camera's near plane, in blocks.
+const NEAR: f32 = 0.05;
 
 @vertex fn vs_main(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
     let uv = vec2(f32((i << 1u) & 2u), f32(i & 2u));
@@ -301,11 +303,13 @@ struct Out {
     seed = (u32(px.x) * 1973u + u32(px.y) * 9277u + u32(params.camera.w) * 26699u) | 1u;
     let cam = params.camera.xyz;
     let dir = p / dist;
-    let h = trace_ray(cam, dir, dist * 1.03 + 0.3, true);
-    if h.kind == RAY_QUERY_INTERSECTION_NONE || abs(h.t - dist) > 0.02 * dist + 0.1 {
+    // From the near plane on: a vine or leaf quad the camera stands in isn't drawn either.
+    let eye = cam + dir * NEAR;
+    let h = trace_ray(eye, dir, dist * 1.03 + 0.3, true);
+    if h.kind == RAY_QUERY_INTERSECTION_NONE || abs(h.t + NEAR - dist) > 0.02 * dist + 0.1 {
         return none;
     }
-    let s = surface(h, cam, dir);
+    let s = surface(h, eye, dir);
     let x = s.p + s.n * (0.002 + dist * 0.0004);
     var light = direct(x, s.ln) + block_glow(s.block);
     // One bounce: the sky, or the sun, sky and emission on the face the ray meets.
