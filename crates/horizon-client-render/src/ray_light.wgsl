@@ -302,12 +302,19 @@ struct Out {
     if fade <= 0.0 { return none; }
     seed = (u32(px.x) * 1973u + u32(px.y) * 9277u + u32(params.camera.w) * 26699u) | 1u;
     let cam = params.camera.xyz;
-    let dir = p / dist;
+    var dir = p / dist;
     // From the near plane on: a vine or leaf quad the camera stands in isn't drawn either.
-    let eye = cam + dir * NEAR;
-    let h = trace_ray(eye, dir, dist * 1.03 + 0.3, true);
+    var eye = cam + dir * NEAR;
+    var h = trace_ray(eye, dir, dist * 1.03 + 0.3, true);
     if h.kind == RAY_QUERY_INTERSECTION_NONE || abs(h.t + NEAR - dist) > 0.02 * dist + 0.1 {
-        return none;
+        // A ray that slips through the seam between two triangles would leave a line of
+        // vanilla's light along it: once more, a fraction of a pixel aside.
+        dir = normalize(p + vec3(0.0007, 0.0005, -0.0006) * dist);
+        eye = cam + dir * NEAR;
+        h = trace_ray(eye, dir, dist * 1.03 + 0.3, true);
+        if h.kind == RAY_QUERY_INTERSECTION_NONE || abs(h.t + NEAR - dist) > 0.02 * dist + 0.1 {
+            return none;
+        }
     }
     let s = surface(h, eye, dir);
     let x = s.p + s.n * (0.002 + dist * 0.0004);
