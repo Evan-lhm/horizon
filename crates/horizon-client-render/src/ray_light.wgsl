@@ -246,7 +246,9 @@ fn sky_radiance(d: vec3<f32>) -> vec3<f32> {
     // Vanilla's night sky is near black, so add a bluish ambient that fades out by day.
     let night = (1.0 - params.sky.w) * vec3(0.08, 0.13, 0.27);
     // The open sky overhead lights shadows bluer than the hazy horizon does.
-    let zenith = params.sky.rgb * 0.9 + night;
+    // Half way to white: the sky's own saturated blue would turn sand and stone grey.
+    let blue = params.sky.rgb;
+    let zenith = mix(blue, vec3(dot(blue, vec3(0.2126, 0.7152, 0.0722))), 0.5) * 0.9 + night;
     let horizon = params.horizon.rgb * 0.6 + night;
     if d.y < 0.0 { return horizon * 0.3; }
     return mix(horizon, zenith, sqrt(d.y));
