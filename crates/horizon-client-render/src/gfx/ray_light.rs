@@ -862,7 +862,7 @@ fn celestial(sun_angle_degrees: f32) -> (Vec3, [f32; 4], f32) {
     let (dir, color) = if day > 0.02 {
         (sun, sun_color)
     } else {
-        (-sun, Vec3::new(0.55, 0.65, 1.0) * 0.12)
+        (-sun, Vec3::new(0.3, 0.45, 1.0) * 0.16)
     };
     (dir, [color.x, color.y, color.z, 0.0], day)
 }
