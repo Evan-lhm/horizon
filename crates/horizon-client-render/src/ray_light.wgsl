@@ -55,7 +55,7 @@ override ENCODE: f32 = 0.0;
 // ray_light_blend.wgsl's.
 const EXPOSURE: f32 = 0.4;
 // How much sunlight the air scatters per block (`fs_volume`).
-const HAZE: f32 = 0.003;
+const HAZE: f32 = 0.02;
 // 1 when the sprites are sRGB textures (read back linear), 0 when they hold sRGB values as is.
 override SRGB_SPRITES: f32 = 1.0;
 // terrain.wgsl's `UV_STEPS`.
@@ -227,7 +227,7 @@ fn sky_radiance(d: vec3<f32>) -> vec3<f32> {
 
 // Torches, lamps and lava, as vanilla's block light measures them.
 fn block_glow(level: f32) -> vec3<f32> {
-    return vec3(1.0, 0.68, 0.38) * pow(level, 2.6) * 2.4;
+    return vec3(1.0, 0.68, 0.38) * pow(level, 2.6) * 3.8;
 }
 
 fn random_unit_vector() -> vec3<f32> {
@@ -407,7 +407,8 @@ fn seen(s: Surf) -> vec3<f32> {
     let p4 = params.inverse_view_proj * vec4(ndc, d, 1.0);
     let p = p4.xyz / p4.w;
     let dir = normalize(p);
-    let far = min(length(p), params.fade.y * 0.75);
+    // The nearest 32 blocks: beams in a room or a forest, without veiling the distance.
+    let far = min(length(p), 32.0);
     // Interleaved gradient noise, moved each frame.
     let jitter = fract(52.9829189 * fract(dot(frag.xy, vec2(0.06711056, 0.00583715))
         + params.camera.w * 0.618034));
@@ -421,10 +422,12 @@ fn seen(s: Surf) -> vec3<f32> {
         }
     }
     // Henyey-Greenstein: a forward-scattering haze.
-    let g = 0.7;
+    let g = 0.6;
     let mu = dot(dir, params.light_dir.xyz);
     let phase = (1.0 - g * g) / (4.0 * PI * pow(1.0 + g * g - 2.0 * g * mu, 1.5));
-    var out = params.light_color.rgb * phase * HAZE * open * EXPOSURE * params.sky.w;
+    // Over the sky only a faint glow: the beams belong in front of the world.
+    let air = select(1.0, 0.2, textureLoad(depth, px, 0) <= 0.0);
+    var out = params.light_color.rgb * phase * HAZE * open * EXPOSURE * params.sky.w * air;
     if ENCODE > 0.5 { out = pow(out, vec3(1.0 / 2.2)) * 0.5; }
     return vec4(max(out, vec3(0.0)), 0.0);
 }

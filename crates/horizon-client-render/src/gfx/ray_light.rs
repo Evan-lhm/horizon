@@ -684,7 +684,7 @@ fn sun_direction(degrees: f32) -> Vec3 {
 /// times its strength; and daylight, 0 to 1.
 fn celestial(sun_angle_degrees: f32) -> (Vec3, [f32; 4], f32) {
     let sun = sun_direction(sun_angle_degrees);
-    let day = smoothstep(-0.08, 0.25, sun.y);
+    let day = smoothstep(-0.12, 0.15, sun.y);
     // Warmer near the horizon.
     let low = 1.0 - smoothstep(0.0, 0.45, sun.y);
     let sun_color = Vec3::new(1.0, 0.93 - 0.25 * low, 0.82 - 0.45 * low) * 2.2 * day;
