@@ -326,8 +326,8 @@ fn seen(s: Surf) -> vec3<f32> {
     if d <= o + 0.000001 || p.y >= 0.0 || abs(g.y) < 0.9 || abs(y - 0.8879) > 0.03 {
         return vec4(0.0);
     }
+    // Past the traced area the water still mirrors the sky.
     let fade = 1.0 - smoothstep(params.fade.x, params.fade.y, length(p.xz));
-    if fade <= 0.0 { return vec4(0.0); }
     seed = (u32(px.x) * 1973u + u32(px.y) * 9277u + u32(params.camera.w) * 26699u) | 1u;
     let v = normalize(p);
     let w = p.xz + params.camera.xz;
@@ -339,16 +339,20 @@ fn seen(s: Surf) -> vec3<f32> {
     var r = reflect(v, n);
     r.y = abs(r.y);
     let origin = p + params.camera.xyz + vec3(0.0, 0.02, 0.0);
-    let h = trace_ray(origin, r, params.fade.z, true);
-    var col: vec3<f32>;
-    if h.kind == RAY_QUERY_INTERSECTION_NONE {
-        let sun = pow(max(dot(r, params.light_dir.xyz), 0.0), 1500.0) * 30.0;
-        col = sky_radiance(r) * 1.25 + params.light_color.rgb * sun;
-    } else {
-        col = seen(surface(h, origin, r));
+    // The sky as vanilla colours it (already the picture's own brightness), and the sun's
+    // glint; or what the ray meets, lit as the traced light is.
+    let sun = pow(max(dot(r, params.light_dir.xyz), 0.0), 1500.0) * 30.0;
+    var col = mix(params.horizon.rgb, params.sky.rgb, sqrt(r.y))
+        + params.light_color.rgb * sun * EXPOSURE;
+    if fade > 0.0 {
+        let h = trace_ray(origin, r, params.fade.z, true);
+        if h.kind != RAY_QUERY_INTERSECTION_NONE {
+            col = mix(col, seen(surface(h, origin, r)) * EXPOSURE, fade);
+        }
     }
+    // Schlick's Fresnel for water, with a floor so it reads from above as well.
     let fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(-v, n), 0.0), 5.0);
-    var out = max(col * EXPOSURE, vec3(0.0));
+    var out = max(col, vec3(0.0));
     if ENCODE > 0.5 { out = pow(out, vec3(1.0 / 2.2)); }
-    return vec4(out, clamp(mix(0.1, 1.0, fresnel), 0.0, 1.0) * fade);
+    return vec4(out, clamp(0.3 + 0.7 * fresnel, 0.0, 1.0));
 }
