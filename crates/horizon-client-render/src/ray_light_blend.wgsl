@@ -64,7 +64,8 @@ const EXPOSURE: f32 = 0.3;
     // Neighbours at about the same distance, weighted less as the history fills.
     var sum = c.rgb;
     var weight = 1.0;
-    let spread = 2.0 / (1.0 + c.a);
+    // Gone after a few samples: the blur smears the texture along with the noise.
+    let spread = 2.0 / ((1.0 + c.a) * (1.0 + c.a));
     for (var y = -2; y <= 2; y++) {
         for (var x = -2; x <= 2; x++) {
             let q = clamp(px + vec2(x, y), vec2(0), size - 1);
