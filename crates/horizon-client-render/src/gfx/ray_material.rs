@@ -1,6 +1,6 @@
 //! What the ray-traced light knows of a sprite (#13780): how much it glows and how it shines.
 //! Packed per sprite array layer for `ray_light.wgsl`: bits 0-7 emission, bits 8-15 roughness
-//! (255: fully diffuse, the default), bit 16 metal.
+//! (255: fully diffuse, the default), bit 16 metal, bit 17 foliage (lit the same from every side).
 
 /// A plain, diffuse sprite.
 pub(super) const DEFAULT: u32 = 255 << 8;
@@ -50,9 +50,17 @@ pub(super) fn material(name: &str) -> u32 {
         _ if n.starts_with("quartz_") || n.starts_with("smooth_quartz") => gloss(0.35),
         _ if n.starts_with("polished_") => gloss(0.4),
         _ if n.ends_with("_glazed_terracotta") => gloss(0.3),
+        _ if FOLIAGE.iter().any(|f| n.contains(f)) && !n.starts_with("grass_block") => {
+            DEFAULT | 1 << 17
+        }
         _ => DEFAULT,
     }
 }
+
+/// Thin plants: fully rough, and never view-dependent.
+const FOLIAGE: [&str; 10] = [
+    "leaves", "grass", "vine", "fern", "sapling", "bush", "lily", "tulip", "flower", "azalea",
+];
 
 #[cfg(test)]
 mod tests {
@@ -65,5 +73,7 @@ mod tests {
         let m = material("modded:block/gold_block");
         assert_eq!(((m >> 8) & 0xff, m >> 16), (63, 1));
         assert_eq!(material("minecraft:block/stone"), DEFAULT);
+        assert_eq!(material("minecraft:block/oak_leaves"), DEFAULT | 1 << 17);
+        assert_eq!(material("minecraft:block/grass_block_top"), DEFAULT);
     }
 }

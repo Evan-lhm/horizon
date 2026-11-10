@@ -65,7 +65,8 @@ fn linear_fog(d: f32, start: f32, end: f32) -> f32 {
 @group(0) @binding(13) var sprites_7: texture_2d_array<f32>;
 // The world's depth with only its opaque part drawn (`fs_reflect`).
 @group(0) @binding(14) var opaque_depth: texture_depth_2d;
-// gfx/ray_material.rs's word per sprite layer: bits 0-7 emission, 8-15 roughness, 16 metal.
+// gfx/ray_material.rs's word per sprite layer: bits 0-7 emission, 8-15 roughness, 16 metal,
+// 17 foliage.
 @group(0) @binding(15) var<storage, read> materials: array<u32>;
 override SPRITE_SPLIT: u32 = 2048u;
 // 1 for a target holding gamma-encoded colour (`fs_reflect`).
@@ -194,6 +195,8 @@ struct Surf {
     emission: f32,
     rough: f32,
     metal: f32,
+    // The normal the sun lights: straight up for foliage, matte from every side.
+    ln: vec3<f32>,
 }
 fn surface(h: RayIntersection, origin: vec3<f32>, dir: vec3<f32>) -> Surf {
     let t = tri(h.instance_custom_data, h.primitive_index, h.barycentrics);
@@ -212,7 +215,8 @@ fn surface(h: RayIntersection, origin: vec3<f32>, dir: vec3<f32>) -> Surf {
     var m = 255u << 8u;
     if layer < arrayLength(&materials) { m = materials[layer]; }
     return Surf(origin + dir * h.t, n, linear(tex) * linear(tint), sky, block,
-        f32(m & 0xffu) / 255.0 * 6.0, f32((m >> 8u) & 0xffu) / 255.0, f32((m >> 16u) & 1u));
+        f32(m & 0xffu) / 255.0 * 6.0, f32((m >> 8u) & 0xffu) / 255.0, f32((m >> 16u) & 1u),
+        select(n, vec3(0.0, 1.0, 0.0), (m & 0x20000u) != 0u));
 }
 
 fn basis(n: vec3<f32>, l: vec3<f32>) -> vec3<f32> {
@@ -303,7 +307,7 @@ struct Out {
     }
     let s = surface(h, cam, dir);
     let x = s.p + s.n * (0.002 + dist * 0.0004);
-    var light = direct(x, s.n) + block_glow(s.block);
+    var light = direct(x, s.ln) + block_glow(s.block);
     // One bounce: the sky, or the sun, sky and emission on the face the ray meets.
     let gd = cosine_dir(s.n);
     let g = trace_ray(x, gd, params.fade.z, true);
@@ -312,7 +316,7 @@ struct Out {
     } else {
         let hs = surface(g, x, gd);
         let hx = hs.p + hs.n * 0.003;
-        light += hs.albedo * (direct(hx, hs.n) + sky_radiance(vec3(0.0, 1.0, 0.0)) * hs.sky * 0.6 + hs.emission);
+        light += hs.albedo * (direct(hx, hs.ln) + sky_radiance(vec3(0.0, 1.0, 0.0)) * hs.sky * 0.6 + hs.emission);
     }
     light += vec3(0.01);
     var col = s.albedo * light + s.albedo * s.emission;
@@ -360,7 +364,7 @@ struct Out {
 fn seen(s: Surf) -> vec3<f32> {
     let x = s.p + s.n * 0.003;
     let sky = sky_radiance(vec3(0.0, 1.0, 0.0)) * (0.15 + 0.85 * s.sky);
-    return s.albedo * (direct(x, s.n) + block_glow(s.block) + sky + s.emission);
+    return s.albedo * (direct(x, s.ln) + block_glow(s.block) + sky + s.emission);
 }
 
 // Reflections on water, after translucent terrain: where the world's depth stands in front of
