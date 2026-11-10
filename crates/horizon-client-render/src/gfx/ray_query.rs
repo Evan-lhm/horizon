@@ -6,6 +6,9 @@
 /// The lighting traced through them (step 3).
 #[path = "ray_light.rs"]
 mod ray_light;
+/// Per-sprite glow and gloss.
+#[path = "ray_material.rs"]
+mod ray_material;
 /// The terrain's acceleration structures (step 2).
 #[path = "ray_scene.rs"]
 pub(in crate::gfx) mod ray_scene;

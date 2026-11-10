@@ -47,6 +47,8 @@ struct Params {
 @group(0) @binding(13) var sprites_7: texture_2d_array<f32>;
 // The world's depth with only its opaque part drawn (`fs_reflect`).
 @group(0) @binding(14) var opaque_depth: texture_depth_2d;
+// gfx/ray_material.rs's word per sprite layer: bits 0-7 emission, 8-15 roughness, 16 metal.
+@group(0) @binding(15) var<storage, read> materials: array<u32>;
 override SPRITE_SPLIT: u32 = 2048u;
 // 1 for a target holding gamma-encoded colour (`fs_reflect`).
 override ENCODE: f32 = 0.0;
@@ -168,6 +170,10 @@ struct Surf {
     // Vanilla's sky and block light at the point, 0 to 1.
     sky: f32,
     block: f32,
+    // How much the face glows (times its albedo), how rough it is (1: diffuse), 1 for metal.
+    emission: f32,
+    rough: f32,
+    metal: f32,
 }
 fn surface(h: RayIntersection, origin: vec3<f32>, dir: vec3<f32>) -> Surf {
     let t = tri(h.instance_custom_data, h.primitive_index, h.barycentrics);
@@ -183,7 +189,10 @@ fn surface(h: RayIntersection, origin: vec3<f32>, dir: vec3<f32>) -> Surf {
     let block = dot(vec3<f32>(l >> vec3(8u)), t.w) / 240.0;
     // The tint and ambient occlusion stay; the shade gives way to the traced light.
     let tint = min(color.rgb / face_shade(n), vec3(1.0));
-    return Surf(origin + dir * h.t, n, linear(tex) * linear(tint), sky, block);
+    var m = 255u << 8u;
+    if layer < arrayLength(&materials) { m = materials[layer]; }
+    return Surf(origin + dir * h.t, n, linear(tex) * linear(tint), sky, block,
+        f32(m & 0xffu) / 255.0 * 6.0, f32((m >> 8u) & 0xffu) / 255.0, f32((m >> 16u) & 1u));
 }
 
 fn basis(n: vec3<f32>, l: vec3<f32>) -> vec3<f32> {
@@ -217,6 +226,13 @@ fn sky_radiance(d: vec3<f32>) -> vec3<f32> {
 // Torches, lamps and lava, as vanilla's block light measures them.
 fn block_glow(level: f32) -> vec3<f32> {
     return vec3(1.0, 0.68, 0.38) * pow(level, 2.6) * 2.4;
+}
+
+fn random_unit_vector() -> vec3<f32> {
+    let z = rand() * 2.0 - 1.0;
+    let phi = 2.0 * PI * rand();
+    let r = sqrt(max(0.0, 1.0 - z * z));
+    return vec3(r * cos(phi), r * sin(phi), z);
 }
 
 // The sun or moon reaching point `p` of normal `n`, through a soft shadow.
@@ -273,10 +289,26 @@ struct Out {
     } else {
         let hs = surface(g, x, gd);
         let hx = hs.p + hs.n * 0.003;
-        light += hs.albedo * (direct(hx, hs.n) + block_glow(hs.block) + sky_radiance(vec3(0.0, 1.0, 0.0)) * hs.sky * 0.6);
+        light += hs.albedo * (direct(hx, hs.n) + block_glow(hs.block) + sky_radiance(vec3(0.0, 1.0, 0.0)) * hs.sky * 0.6 + hs.emission);
     }
     light += vec3(0.01);
-    let col = min(s.albedo * light, vec3(16.0));
+    var col = s.albedo * light + s.albedo * s.emission;
+    if s.rough < 0.99 {
+        // One specular ray, blended in by Schlick's Fresnel; metal has no diffuse part.
+        var r = reflect(dir, s.n);
+        let rp = normalize(r + s.rough * s.rough * random_unit_vector());
+        if dot(rp, s.n) > 0.0 { r = rp; }
+        let sh = trace_ray(x, r, params.fade.z, true);
+        var spec = sky_radiance(r)
+            + params.light_color.rgb * pow(max(dot(r, params.light_dir.xyz), 0.0), 800.0) * 20.0;
+        if sh.kind != RAY_QUERY_INTERSECTION_NONE { spec = seen(surface(sh, x, r)); }
+        let c = max(dot(-dir, s.n), 0.0);
+        let f0 = mix(vec3(0.04), s.albedo, s.metal);
+        let fr = f0 + (vec3(1.0) - f0) * pow(1.0 - c, 5.0);
+        col = s.albedo * light * (vec3(1.0) - fr) * (1.0 - s.metal) + spec * fr
+            + s.albedo * s.emission;
+    }
+    col = min(col, vec3(16.0));
     // The history at this point last frame, unless it was another surface then.
     var count = 1.0;
     var out = col;
@@ -303,7 +335,7 @@ struct Out {
 fn seen(s: Surf) -> vec3<f32> {
     let x = s.p + s.n * 0.003;
     let sky = sky_radiance(vec3(0.0, 1.0, 0.0)) * (0.15 + 0.85 * s.sky);
-    return s.albedo * (direct(x, s.n) + block_glow(s.block) + sky);
+    return s.albedo * (direct(x, s.n) + block_glow(s.block) + sky + s.emission);
 }
 
 // Reflections on water, after translucent terrain: where the world's depth stands in front of

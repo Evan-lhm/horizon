@@ -48,6 +48,8 @@ pub(in crate::gfx) struct RayLight {
     pipeline_layout: wgpu::PipelineLayout,
     module: wgpu::ShaderModule,
     params: wgpu::Buffer,
+    /// `ray_material`'s word per sprite layer.
+    materials: wgpu::Buffer,
     trace: Option<(u32, wgpu::RenderPipeline)>,
     composite: Option<(wgpu::TextureFormat, wgpu::RenderPipeline)>,
     reflect: Option<((wgpu::TextureFormat, u32), wgpu::RenderPipeline)>,
@@ -107,6 +109,16 @@ impl RayLight {
             tex(4, unfiltered),
             tex(5, unfiltered),
             tex(14, wgpu::TextureSampleType::Depth),
+            wgpu::BindGroupLayoutEntry {
+                binding: 15,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
         ];
         entries.extend(
             (6..6 + SPRITE_ARRAYS).map(|binding| wgpu::BindGroupLayoutEntry {
@@ -142,6 +154,7 @@ impl RayLight {
             pipeline_layout,
             module,
             params,
+            materials: material_buffer(device, &[super::ray_material::DEFAULT]),
             trace: None,
             composite: None,
             reflect: None,
@@ -151,6 +164,20 @@ impl RayLight {
             armed: false,
             prev: None,
         }
+    }
+
+    /// The sprite layers' materials (`ray_material`), after a resource reload.
+    pub(in crate::gfx) fn set_materials(
+        &mut self,
+        device: &wgpu::Device,
+        layers: &std::collections::BTreeMap<String, u32>,
+    ) {
+        let len = layers.values().max().map_or(1, |&m| m as usize + 1);
+        let mut words = vec![super::ray_material::DEFAULT; len];
+        for (name, &layer) in layers {
+            words[layer as usize] = super::ray_material::material(name);
+        }
+        self.materials = material_buffer(device, &words);
     }
 
     /// This frame's view: `jittered` is its camera-relative clip-from-world, `anchor` the chunk
@@ -395,6 +422,10 @@ impl RayLight {
                 binding: 14,
                 resource: view(&t.opaque.1),
             },
+            wgpu::BindGroupEntry {
+                binding: 15,
+                resource: self.materials.as_entire_binding(),
+            },
         ];
         for i in 0..SPRITE_ARRAYS as usize {
             entries.push(wgpu::BindGroupEntry {
@@ -496,6 +527,17 @@ impl RayLight {
 }
 
 /// Blends the traced light over the world's colour in `format`.
+fn material_buffer(device: &wgpu::Device, words: &[u32]) -> wgpu::Buffer {
+    wgpu::util::DeviceExt::create_buffer_init(
+        device,
+        &wgpu::util::BufferInitDescriptor {
+            label: Some("Ray-traced light materials"),
+            contents: bytemuck::cast_slice(words),
+            usage: wgpu::BufferUsages::STORAGE,
+        },
+    )
+}
+
 fn composite_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> wgpu::RenderPipeline {
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Ray-traced light, blend"),

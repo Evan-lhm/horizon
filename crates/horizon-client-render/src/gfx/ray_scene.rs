@@ -21,6 +21,13 @@ const REACH: i32 = 8;
 
 /// The renderer's side: the calls gfx.rs makes, each one line there.
 impl Renderer {
+    /// The sprite layers' glow and gloss, after a resource reload.
+    pub fn set_ray_materials(&mut self, layers: &std::collections::BTreeMap<String, u32>) {
+        if let Some(rt) = &mut self.ray_scene {
+            rt.light.set_materials(&self.device, layers);
+        }
+    }
+
     /// Section `key` got a new mesh, or lost it.
     pub(in crate::gfx) fn ray_mark(&mut self, key: SectionKey) {
         if let Some(rt) = &mut self.ray_scene {
