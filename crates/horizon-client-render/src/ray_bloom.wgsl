@@ -10,9 +10,9 @@ override ENCODE: f32 = 0.0;
 // Linear light times this, as ray_light_blend.wgsl's.
 const EXPOSURE: f32 = 0.4;
 // Light (after exposure) above this blooms, softly over KNEE either side.
-const THRESHOLD: f32 = 1.0;
+const THRESHOLD: f32 = 0.7;
 const KNEE: f32 = 0.25;
-const STRENGTH: f32 = 0.15;
+const STRENGTH: f32 = 1.0;
 // Blur taps each side, and their spacing in quarter-resolution texels.
 const TAPS: i32 = 6;
 const STEP: f32 = 2.0;

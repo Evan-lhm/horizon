@@ -71,7 +71,7 @@ override ENCODE: f32 = 0.0;
 // ray_light_blend.wgsl's.
 const EXPOSURE: f32 = 0.4;
 // How much sunlight the air scatters per block (`fs_volume`).
-const HAZE: f32 = 0.02;
+const HAZE: f32 = 0.05;
 // 1 when the sprites are sRGB textures (read back linear), 0 when they hold sRGB values as is.
 override SRGB_SPRITES: f32 = 1.0;
 // terrain.wgsl's `UV_STEPS`.
