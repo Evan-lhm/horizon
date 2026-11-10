@@ -15,7 +15,7 @@ const SPRITE_ARRAYS: u32 = 8;
 const RAY_LENGTH: f32 = 160.0;
 /// The history: linear light and its sample count, and the point's distance and fade.
 const HISTORY: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
-const AUX: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Float;
+const AUX: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
 
 /// `ray_light.wgsl`'s `Params`.
 #[repr(C)]

@@ -186,6 +186,14 @@ fn trace_window(origin: vec3<f32>, dir: vec3<f32>, tmin: f32, tmax: f32) -> RayI
     return rayQueryGetCommittedIntersection(&rq);
 }
 
+// The axis and side a face mostly looks along, 1 to 6.
+fn facing(n: vec3<f32>) -> f32 {
+    let a = abs(n);
+    if a.x >= a.y && a.x >= a.z { return select(2.0, 1.0, n.x > 0.0); }
+    if a.y >= a.z { return select(4.0, 3.0, n.y > 0.0); }
+    return select(6.0, 5.0, n.z > 0.0);
+}
+
 fn linear(c: vec3<f32>) -> vec3<f32> {
     return select(pow(c, vec3(2.2)), c, SRGB_SPRITES > 0.5);
 }
@@ -296,14 +304,15 @@ fn untone(c: vec3<f32>) -> vec3<f32> {
 struct Out {
     // Linear light, and the samples it averages (0: vanilla's lighting stays).
     @location(0) color: vec4<f32>,
-    // The point's distance from the camera, and how much the traced light shows.
-    @location(1) aux: vec2<f32>,
+    // The point's distance from the camera, how much the traced light shows, and which way its
+    // face looks (`facing`), so the history never takes another face's light.
+    @location(1) aux: vec4<f32>,
     // This frame's albedo, no history: `color` is light divided by it, so the texture stays crisp.
     @location(2) albedo: vec4<f32>,
 }
 
 @fragment fn fs_trace(@builtin(position) frag: vec4<f32>) -> Out {
-    let none = Out(vec4(0.0), vec2(0.0), vec4(0.0));
+    let none = Out(vec4(0.0), vec4(0.0), vec4(0.0));
     let size = vec2<f32>(textureDimensions(depth));
     let px = vec2<i32>(frag.xy);
     let d = textureLoad(depth, px, 0);
@@ -340,7 +349,10 @@ struct Out {
     } else {
         let hs = surface(g, x, gd);
         let hx = hs.p + hs.n * 0.003;
-        light += hs.albedo * (direct(hx, hs.ln) + sky_radiance(vec3(0.0, 1.0, 0.0)) * hs.sky * 0.6 + hs.emission);
+        // Water isn't in the scene: a sea floor or a cave the ray reaches still gets the sun, so
+        // vanilla's sky light at the hit (low under deep water) dims what it sends back.
+        light += hs.albedo * (direct(hx, hs.ln) * hs.sky * hs.sky
+            + sky_radiance(vec3(0.0, 1.0, 0.0)) * hs.sky * 0.6 + hs.emission);
     }
     light += vec3(0.01);
     var col = s.albedo * light + s.albedo * s.emission;
@@ -374,9 +386,9 @@ struct Out {
         if all(puv >= vec2(0.0)) && all(puv < vec2(1.0)) {
             let pp = vec2<i32>(puv * size);
             let hc = textureLoad(hist_color, pp, 0);
-            let hd = textureLoad(hist_aux, pp, 0).x;
+            let ha = textureLoad(hist_aux, pp, 0);
             let expected = length(s.p - params.prev_camera.xyz);
-            if hc.a > 0.0 && abs(hd - expected) < 0.01 * expected + 0.04 {
+            if hc.a > 0.0 && ha.z == facing(s.n) && abs(ha.x - expected) < 0.005 * expected + 0.03 {
                 // A point that moved on screen (past the jitter) keeps a shorter history: no trails.
                 let moved = max(length(puv * size - frag.xy) - 1.0, 0.0);
                 count = min(hc.a + 1.0, max(MAX_HISTORY / (1.0 + 0.5 * moved), 6.0));
@@ -385,7 +397,7 @@ struct Out {
             }
         }
     }
-    return Out(vec4(out, count), vec2(length(s.p - cam), fade), vec4(albedo, 1.0));
+    return Out(vec4(out, count), vec4(length(s.p - cam), fade, facing(s.n), 0.0), vec4(albedo, 1.0));
 }
 
 // What a reflected ray sees of face `s`: its sun, sky and block light, without a bounce.
