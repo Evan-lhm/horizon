@@ -248,7 +248,7 @@ fn sky_radiance(d: vec3<f32>) -> vec3<f32> {
 
 // Torches, lamps and lava, as vanilla's block light measures them.
 fn block_glow(level: f32) -> vec3<f32> {
-    return vec3(1.0, 0.68, 0.38) * pow(level, 2.6) * 5.0;
+    return vec3(1.0, 0.68, 0.38) * pow(level, 4.0) * 3.0;
 }
 
 fn random_unit_vector() -> vec3<f32> {
@@ -304,7 +304,7 @@ struct Out {
     let s = surface(h, cam, dir);
     let x = s.p + s.n * (0.002 + dist * 0.0004);
     var light = direct(x, s.n) + block_glow(s.block);
-    // One bounce: the sky, or the sun, sky and block light on the face the ray meets.
+    // One bounce: the sky, or the sun, sky and emission on the face the ray meets.
     let gd = cosine_dir(s.n);
     let g = trace_ray(x, gd, params.fade.z, true);
     if g.kind == RAY_QUERY_INTERSECTION_NONE {
@@ -312,7 +312,7 @@ struct Out {
     } else {
         let hs = surface(g, x, gd);
         let hx = hs.p + hs.n * 0.003;
-        light += hs.albedo * (direct(hx, hs.n) + block_glow(hs.block) + sky_radiance(vec3(0.0, 1.0, 0.0)) * hs.sky * 0.6 + hs.emission);
+        light += hs.albedo * (direct(hx, hs.n) + sky_radiance(vec3(0.0, 1.0, 0.0)) * hs.sky * 0.6 + hs.emission);
     }
     light += vec3(0.01);
     var col = s.albedo * light + s.albedo * s.emission;
