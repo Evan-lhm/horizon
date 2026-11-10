@@ -175,15 +175,29 @@ fn trace_ray(origin: vec3<f32>, dir: vec3<f32>, far: f32, closest: bool) -> RayI
     return rayQueryGetCommittedIntersection(&rq);
 }
 
-// The closest face between `tmin` and `tmax`, cut-out texels included: the camera ray, kept to
-// the slab around the raster's depth.
-fn trace_window(origin: vec3<f32>, dir: vec3<f32>, tmin: f32, tmax: f32) -> RayIntersection {
+// The closest face between `tmin` and `tmax`: the camera ray, kept to the slab around the
+// raster's depth. With `cutout`, only where the sprite is opaque, and a cut-out quad wins over
+// the one it lies on (a grass block's side overlay over its dirt); without, any face, for where
+// the raster drew a texel the alpha test misses (a leaf's edge).
+fn trace_window(origin: vec3<f32>, dir: vec3<f32>, tmin: f32, tmax: f32, cutout: bool) -> RayIntersection {
     var rq: ray_query;
     rayQueryInitialize(&rq, tlas, RayDesc(RAY_FLAG_NONE, 0xffu, tmin, tmax, origin, dir));
     while rayQueryProceed(&rq) {
-        rayQueryConfirmIntersection(&rq);
+        let c = rayQueryGetCandidateIntersection(&rq);
+        if !cutout {
+            rayQueryConfirmIntersection(&rq);
+        } else if kept(c) {
+            let h = rayQueryGetCommittedIntersection(&rq);
+            if h.kind == RAY_QUERY_INTERSECTION_NONE || c.t < h.t - 0.001 || (c.t < h.t + 0.001 && !is_opaque(c)) {
+                rayQueryConfirmIntersection(&rq);
+            }
+        }
     }
     return rayQueryGetCommittedIntersection(&rq);
+}
+fn is_opaque(c: RayIntersection) -> bool {
+    let t = tri(c.instance_custom_data, c.primitive_index, c.barycentrics);
+    return (word(t.v.x, 4u) & OPAQUE_LAYER) != 0u;
 }
 
 // The axis and side a face mostly looks along, 1 to 6.
@@ -280,15 +294,20 @@ fn cone_dir(d: vec3<f32>, angle: f32) -> vec3<f32> {
     return normalize(basis(d, vec3(r * cos(phi), r * sin(phi), 1.0)));
 }
 
+fn greyer(c: vec3<f32>) -> vec3<f32> {
+    return mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), 0.85);
+}
+
 // The sky's light from direction `d`, from vanilla's sky and fog colours.
 fn sky_radiance(d: vec3<f32>) -> vec3<f32> {
     // Vanilla's night sky is near black, so add a bluish ambient that fades out by day.
     let night = (1.0 - params.sky.w) * vec3(0.08, 0.13, 0.27);
     // The open sky overhead lights shadows bluer than the hazy horizon does.
-    // Half way to white: the sky's own saturated blue would turn sand and stone grey.
-    let blue = params.sky.rgb;
-    let zenith = mix(blue, vec3(dot(blue, vec3(0.2126, 0.7152, 0.0722))), 0.5) * 0.9 + night;
-    let horizon = params.horizon.rgb * 0.6 + night;
+    // Mostly grey, a hint of blue left: vanilla's sky and fog are far bluer than a real sky's
+    // light, and their blue turns grass, sand and stone in the shade grey.
+    // About a fifth of the sun's light in all, as on a clear day.
+    let zenith = greyer(params.sky.rgb) * 1.45 + night;
+    let horizon = greyer(params.horizon.rgb) * 0.95 + night;
     if d.y < 0.0 { return horizon * 0.3; }
     return mix(horizon, zenith, sqrt(d.y));
 }
@@ -310,8 +329,37 @@ fn direct(p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     let l = cone_dir(params.light_dir.xyz, 0.02);
     let ndl = dot(n, l);
     if ndl <= 0.0 { return vec3(0.0); }
-    let open = trace_ray(p, l, params.fade.z, false).kind == RAY_QUERY_INTERSECTION_NONE;
-    return params.light_color.rgb * ndl * select(0.0, 1.0, open);
+    return params.light_color.rgb * ndl * sun_through(p, l);
+}
+
+// How much sunlight gets from `p` along `l` past the faces in between: an opaque one stops it,
+// a leaf's or plant's lets some through in its own colour, so shade under a canopy turns green
+// rather than the sky's grey-blue.
+fn sun_through(p: vec3<f32>, l: vec3<f32>) -> vec3<f32> {
+    var rq: ray_query;
+    rayQueryInitialize(&rq, tlas, RayDesc(RAY_FLAG_NONE, 0xffu, 0.0, params.fade.z, p, l));
+    var through = vec3(1.0);
+    while rayQueryProceed(&rq) {
+        let c = rayQueryGetCandidateIntersection(&rq);
+        let t = tri(c.instance_custom_data, c.primitive_index, c.barycentrics);
+        let layer = word(t.v.x, 4u) & 0xffffu;
+        if (layer & OPAQUE_LAYER) != 0u {
+            rayQueryConfirmIntersection(&rq);
+            continue;
+        }
+        let tex = texel(layer, tri_uv(t));
+        if tex.a < 0.5 { continue; }
+        if layer < arrayLength(&materials) && (materials[layer] & 0x20000u) != 0u {
+            // The leaf's hue (texture times tint), its brightest channel at half.
+            let tint = unpack4x8unorm(word(t.v.x, 5u)).rgb;
+            let a = linear(tex.rgb) * linear(tint);
+            through *= 0.5 * a / max(max(a.r, a.g), max(a.b, 0.001));
+        } else {
+            rayQueryConfirmIntersection(&rq);
+        }
+    }
+    if rayQueryGetCommittedIntersection(&rq).kind != RAY_QUERY_INTERSECTION_NONE { return vec3(0.0); }
+    return through;
 }
 
 // Light in the tone-weighted space history blends in, and back.
@@ -351,12 +399,14 @@ struct Out {
     // Only around the depth the raster drew: the face it shows wins, even where the ray's
     // alpha test would see through a leaf, and a vine at the eye is skipped.
     let slack = 0.02 * dist + 0.1;
-    var h = trace_window(cam, dir, max(dist - slack, NEAR), dist + slack);
+    let lo = max(dist - slack, NEAR);
+    var h = trace_window(cam, dir, lo, dist + slack, true);
+    if h.kind == RAY_QUERY_INTERSECTION_NONE { h = trace_window(cam, dir, lo, dist + slack, false); }
     if h.kind == RAY_QUERY_INTERSECTION_NONE {
         // A ray that slips through the seam between two triangles would leave a line of
         // vanilla's light along it: once more, a fraction of a pixel aside.
         dir = normalize(p + vec3(0.0007, 0.0005, -0.0006) * dist);
-        h = trace_window(cam, dir, max(dist - slack, NEAR), dist + slack);
+        h = trace_window(cam, dir, lo, dist + slack, false);
         if h.kind == RAY_QUERY_INTERSECTION_NONE { return none; }
     }
     let s = surface(h, cam, dir);
