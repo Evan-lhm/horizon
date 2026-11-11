@@ -88,7 +88,9 @@ fn cs_meter(@builtin(local_invocation_index) i: u32, @builtin(local_invocation_i
         let want = clamp(KEY / exp(sums[0].x / sums[0].y), mix(1.0, MIN_LIFT, day), mix(1.0, MAX_LIFT, day));
         // Seconds to adapt: slower into the shade than back into the sun, as eyes do.
         let tau = select(0.5, 2.0, want > meter[0]);
-        meter[0] = select(want, mix(meter[0], want, 1.0 - exp(-params.fade.w / tau)), meter[0] > 0.0);
+        // Eased in stops (log2), as the eye does: equal steps up and down the scale.
+        let eased = exp2(mix(log2(max(meter[0], 0.001)), log2(want), 1.0 - exp(-params.fade.w / tau)));
+        meter[0] = select(want, eased, meter[0] > 0.0);
     }
 }
 
