@@ -478,7 +478,16 @@ struct Out {
     }
     let s = surface(h, cam, dir);
     let x = s.p + s.n * (0.002 + dist * 0.0004);
-    var light = direct(x, s.ln) + block_glow(s.block);
+    var sun = direct(x, s.ln);
+    // A leaf lit from behind: the light through it is stronger looking towards the sun
+    // (Henyey-Greenstein's lobe, g = 0.6; plan B8).
+    // shortcut: foliage is told by its upward lighting normal, so a leaf's own top face is
+    // missed; carry the material's bit in `Surf` if that shows.
+    if any(s.ln != s.n) {
+        let c = dot(normalize(s.p - cam), params.light_dir.xyz);
+        sun *= 1.0 + 0.25 * min(0.64 / pow(1.36 - 1.2 * c, 1.5), 6.0);
+    }
+    var light = sun + block_glow(s.block);
     // One bounce: the sky, or the sun, sky and emission on the face the ray meets.
     let gd = cosine_dir(s.n);
     let g = trace_ray(x, gd, params.fade.z, true);
