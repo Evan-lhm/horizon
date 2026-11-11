@@ -959,7 +959,8 @@ fn celestial(sun_angle_degrees: f32) -> (Vec3, [f32; 4], f32) {
     let (dir, color) = if day > 0.02 {
         (sun, sun_color)
     } else {
-        (-sun, Vec3::new(0.3, 0.45, 1.0) * 0.75)
+        // About 1/20 of the sun, and bluer: the shader's night bounce makes up for it.
+        (-sun, Vec3::new(0.2, 0.4, 1.0) * 0.15)
     };
     (dir, [color.x, color.y, color.z, 0.0], day)
 }
@@ -982,7 +983,9 @@ mod tests {
     #[test]
     fn the_moon_lights_the_night() {
         let (dir, color, day) = celestial(180.0);
-        assert!(dir.y > 0.99 && color[0] < 0.3 && day < 0.01);
+        assert!(dir.y > 0.99 && day < 0.01);
+        // Much weaker than the 3x sun, bluer, but not out.
+        assert!(color[2] > 0.1 && color[2] < 0.2 && color[0] < color[2] / 3.0);
         let (dir, color, _) = celestial(0.0);
         assert!(dir.y > 0.99 && color[0] > 0.9);
     }

@@ -422,8 +422,9 @@ struct Out {
         let hx = hs.p + hs.n * 0.003;
         // Water isn't in the scene: a sea floor or a cave the ray reaches still gets the sun, so
         // vanilla's sky light at the hit (low under deep water) dims what it sends back.
+        // Stronger at night: the weak moon alone would leave it darker than vanilla.
         light += hs.albedo * (direct(hx, hs.ln) * hs.sky * hs.sky
-            + sky_radiance(vec3(0.0, 1.0, 0.0)) * hs.sky * 0.6 + hs.emission);
+            + sky_radiance(vec3(0.0, 1.0, 0.0)) * hs.sky * 0.6 + hs.emission) * mix(2.5, 1.0, params.sky.w);
     }
     light += vec3(0.01);
     var col = s.albedo * light + s.albedo * s.emission;
