@@ -362,6 +362,27 @@ fn cache_slot(p: vec3<f32>, n: vec3<f32>, dist: f32) -> u32 {
     return h % CACHE_SLOTS;
 }
 
+// Where the wind blows the waves to.
+const WIND: vec2<f32> = vec2(0.8, 0.6);
+
+// The water's slope at world `w`: ten waves fanned around the wind, each shorter and weaker
+// than the last, with sharp crests (the exponential of a sine), the long ones running faster
+// than the short ones as on deep water (plan B7, the normal only).
+fn wave_slope(w: vec2<f32>, time: f32) -> vec2<f32> {
+    var slope = vec2(0.0);
+    var k = 0.6;
+    var amp = 1.0;
+    for (var i = 0; i < 10; i++) {
+        let turn = sin(f32(i) * 2.4) * 0.7;
+        let d = vec2(WIND.x * cos(turn) - WIND.y * sin(turn), WIND.x * sin(turn) + WIND.y * cos(turn));
+        let phase = dot(d, w) * k - time * sqrt(k) * 1.2 + f32(i) * 1.7;
+        slope += d * (amp * exp(sin(phase) - 1.0) * cos(phase));
+        k *= 1.25;
+        amp *= 0.82;
+    }
+    return slope * 0.6;
+}
+
 // How much of the traced light point `p` (from the camera) keeps near the edge of the traced
 // area: looked at from above (flying) the band is seen face on, so it starts sooner, up to
 // halfway in, and the limit doesn't read as a ring on the ground.
@@ -555,9 +576,7 @@ fn seen(s: Surf) -> vec3<f32> {
     let v = normalize(p);
     let w = p.xz + params.camera.xz;
     let time = params.camera.w * 0.04;
-    let slope = vec2(
-        sin(w.x * 1.7 + time) + 0.5 * sin(w.y * 2.9 - time * 1.3),
-        cos(w.y * 1.9 + time * 0.8) + 0.5 * cos(w.x * 2.3 - time));
+    let slope = wave_slope(w, time);
     let n = normalize(vec3(slope.x * 0.025, 1.0, slope.y * 0.025));
     var r = reflect(v, n);
     r.y = abs(r.y);
