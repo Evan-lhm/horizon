@@ -118,7 +118,7 @@ impl RayScene {
         let reach = std::env::var("HORIZON_RT_CHUNKS")
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(REACH);
+            .unwrap_or_else(|| super::quality().reach(REACH));
         Some(Self {
             blas: FxHashMap::default(),
             dirty: Vec::new(),

@@ -33,13 +33,51 @@ pub(in crate::gfx) fn blas_input(device: &wgpu::Device) -> wgpu::BufferUsages {
 
 /// Whether the player asked for ray tracing (the device needs the feature from its creation).
 fn requested() -> bool {
-    asked(std::env::var("HORIZON_RAY_TRACING").ok().as_deref())
+    quality() != Quality::Off
+}
+
+/// How much ray tracing the player asked for: `HORIZON_RAY_TRACING` today (`1` is medium, or
+/// `low`, `medium`, `high`), the menu's option later (step D).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::gfx) enum Quality {
+    Off,
+    Low,
+    Medium,
+    High,
+}
+
+impl Quality {
+    fn parse(var: Option<&str>) -> Self {
+        if !cfg!(feature = "horizon-extras") {
+            return Self::Off;
+        }
+        match var.map(str::to_ascii_lowercase).as_deref() {
+            Some("low") => Self::Low,
+            Some("1" | "medium") => Self::Medium,
+            Some("high") => Self::High,
+            _ => Self::Off,
+        }
+    }
+
+    /// The chunks the traced scene spans, `medium` being the default's.
+    pub(in crate::gfx) fn reach(self, medium: i32) -> i32 {
+        match self {
+            Self::Off | Self::Medium => medium,
+            Self::Low => medium / 2,
+            Self::High => medium * 3 / 2,
+        }
+    }
+}
+
+pub(in crate::gfx) fn quality() -> Quality {
+    Quality::parse(std::env::var("HORIZON_RAY_TRACING").ok().as_deref())
 }
 
 /// Whether `HORIZON_RAY_TRACING` set to `var` asks for ray tracing: only in a `horizon-extras`
 /// build.
+#[cfg(test)]
 fn asked(var: Option<&str>) -> bool {
-    cfg!(feature = "horizon-extras") && var == Some("1")
+    Quality::parse(var) != Quality::Off
 }
 
 /// The features to request on `adapter`: ray queries, when asked for and offered.
@@ -91,6 +129,18 @@ mod tests {
         assert_eq!(asked(Some("1")), cfg!(feature = "horizon-extras"));
         assert!(!asked(None));
         assert!(!asked(Some("0")));
+    }
+
+    #[test]
+    fn ray_quality_maps_to_reach() {
+        if cfg!(feature = "horizon-extras") {
+            assert_eq!(Quality::parse(Some("1")), Quality::Medium);
+            assert_eq!(Quality::parse(Some("High")), Quality::High);
+            assert_eq!(Quality::parse(Some("low")), Quality::Low);
+        }
+        assert_eq!(Quality::parse(Some("off")), Quality::Off);
+        assert_eq!(Quality::Medium.reach(8), 8);
+        assert!(Quality::Low.reach(8) < 8 && Quality::High.reach(8) > 8);
     }
 
     #[test]
