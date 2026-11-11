@@ -21,7 +21,8 @@ struct Params {
     camera: vec4<f32>,
     // Last frame's camera; w: 1 when the history holds it.
     prev_camera: vec4<f32>,
-    // x, y: the horizontal distance the lighting fades out over; z: how far rays go.
+    // x, y: the horizontal distance the lighting fades out over; z: how far rays go; w: the
+    // seconds since last frame.
     fade: vec4<f32>,
     // The fog's colour (linear) and strength.
     fog_color: vec4<f32>,
@@ -56,9 +57,10 @@ const EXPOSURE: f32 = 0.3;
 @group(0) @binding(4) var<storage, read> adapted: array<f32>;
 @group(0) @binding(5) var<storage, read_write> meter: array<f32>;
 // A scene whose traced light averages under KEY (in the shade of trees, indoors) is lifted
-// towards it, by day only and at most MAX_LIFT: open daylight and the night stay as they are.
-const KEY: f32 = 1.6;
-const MAX_LIFT: f32 = 2.5;
+// towards it, by day only and at most MAX_LIFT: open daylight (about 1.6 at noon) and the
+// night stay as they are.
+const KEY: f32 = 0.6;
+const MAX_LIFT: f32 = 2.0;
 var<workgroup> sums: array<vec2<f32>, 256>;
 
 // One workgroup: the log-average of 64x64 traced pixels, eased into `meter` frame by frame.
@@ -82,7 +84,9 @@ fn cs_meter(@builtin(local_invocation_index) i: u32, @builtin(local_invocation_i
     }
     if i == 0u && sums[0].y >= 64.0 {
         let want = clamp(KEY / exp(sums[0].x / sums[0].y), 1.0, mix(1.0, MAX_LIFT, params.sky.w));
-        meter[0] = select(want, mix(meter[0], want, 0.03), meter[0] > 0.0);
+        // Seconds to adapt: slower into the shade than back into the sun, as eyes do.
+        let tau = select(0.4, 1.5, want > meter[0]);
+        meter[0] = select(want, mix(meter[0], want, 1.0 - exp(-params.fade.w / tau)), meter[0] > 0.0);
     }
 }
 

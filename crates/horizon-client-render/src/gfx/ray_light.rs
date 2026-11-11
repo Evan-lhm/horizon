@@ -75,6 +75,8 @@ pub(in crate::gfx) struct RayLight {
     frame: u32,
     /// This frame draws (`set_frame`).
     armed: bool,
+    /// When the last frame was set: the eye adapts in seconds (`cs_meter`).
+    clock: Option<std::time::Instant>,
     /// Last frame's: clip from the TLAS's space, its camera there and its anchor.
     prev: Option<(Mat4, Vec3, (i32, i32))>,
 }
@@ -216,6 +218,7 @@ impl RayLight {
             current: 0,
             frame: 0,
             armed: false,
+            clock: None,
             prev: None,
         }
     }
@@ -266,6 +269,11 @@ impl RayLight {
         let clip = jittered * Mat4::from_translation(-cam);
         let prev = self.prev.filter(|p| p.2 == anchor);
         self.frame = self.frame.wrapping_add(1);
+        let now = std::time::Instant::now();
+        let dt = self
+            .clock
+            .replace(now)
+            .map_or(0.0, |t| (now - t).as_secs_f32().min(0.25));
         let params = Params {
             inverse_view_proj: jittered.inverse().to_cols_array_2d(),
             prev_clip: prev.map_or(Mat4::IDENTITY, |p| p.0).to_cols_array_2d(),
@@ -275,7 +283,7 @@ impl RayLight {
             horizon: [horizon.x, horizon.y, horizon.z, 0.0],
             camera: [cam.x, cam.y, cam.z, (self.frame % 65536) as f32],
             prev_camera: prev.map_or([0.0; 4], |p| [p.1.x, p.1.y, p.1.z, 1.0]),
-            fade: fade(reach),
+            fade: fade(reach, dt),
             fog_color: {
                 let c = Vec3::new(fog_color[0], fog_color[1], fog_color[2]).powf(2.2);
                 [c.x, c.y, c.z, fog_color[3]]
@@ -925,10 +933,11 @@ fn encodes(format: wgpu::TextureFormat) -> bool {
 }
 
 /// Where the lighting fades out, horizontally from the camera (over the last four chunks, ending where the
-/// TLAS surely spans whatever the camera's place in its own column), and how far rays go.
-fn fade(reach: i32) -> [f32; 4] {
+/// TLAS surely spans whatever the camera's place in its own column), how far rays go, and the
+/// seconds since last frame (`dt`).
+fn fade(reach: i32, dt: f32) -> [f32; 4] {
     let end = (reach.max(1) * 16) as f32;
-    [(end - 64.0).max(0.0), end, RAY_LENGTH, 0.0]
+    [(end - 64.0).max(0.0), end, RAY_LENGTH, dt]
 }
 
 /// Towards the sun, in world space, at vanilla's sun angle: it rises in the east (+x) at 270
