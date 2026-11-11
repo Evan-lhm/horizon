@@ -526,11 +526,12 @@ fn seen(s: Surf) -> vec3<f32> {
             col = mix(col, seen(surface(h, origin, r)) * EXPOSURE, fade);
         }
     }
-    // Schlick's Fresnel for water, with a floor so it reads from above as well.
+    // Schlick's Fresnel for water, with a small floor: from above the water keeps its own
+    // colour (a larger floor greyed it towards the sky), at a glance it mirrors.
     let fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(-v, n), 0.0), 5.0);
     var out = max(fogged(col, length(p), v), vec3(0.0));
     if ENCODE > 0.5 { out = pow(out, vec3(1.0 / 2.2)); }
-    return vec4(out, clamp(0.3 + 0.7 * fresnel, 0.0, 1.0));
+    return vec4(out, clamp(0.08 + 0.92 * fresnel, 0.0, 1.0));
 }
 
 // Sunlight the air scatters towards the camera, through the traced shadows: shafts between
