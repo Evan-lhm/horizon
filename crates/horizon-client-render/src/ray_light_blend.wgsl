@@ -56,11 +56,12 @@ const EXPOSURE: f32 = 0.3;
 // The eye's adaptation, which `cs_meter` keeps: EXPOSURE times it (0 before the first frame).
 @group(0) @binding(4) var<storage, read> adapted: array<f32>;
 @group(0) @binding(5) var<storage, read_write> meter: array<f32>;
-// A scene whose traced light averages under KEY (in the shade of trees, indoors) is lifted
-// towards it, by day only and at most MAX_LIFT: open daylight (about 1.6 at noon) and the
-// night stay as they are.
-const KEY: f32 = 0.6;
-const MAX_LIFT: f32 = 2.0;
+// The exposure brings the traced light's average towards KEY, by day only and between
+// MIN_LIFT (open noon, about 1.6) and MAX_LIFT (indoors, under trees): stepping into the
+// shade starts dark and comes up. The night stays as it is.
+const KEY: f32 = 1.0;
+const MIN_LIFT: f32 = 0.75;
+const MAX_LIFT: f32 = 3.0;
 var<workgroup> sums: array<vec2<f32>, 256>;
 
 // One workgroup: the log-average of 64x64 traced pixels, eased into `meter` frame by frame.
@@ -83,9 +84,10 @@ fn cs_meter(@builtin(local_invocation_index) i: u32, @builtin(local_invocation_i
         if i < n { sums[i] += sums[i + n]; }
     }
     if i == 0u && sums[0].y >= 64.0 {
-        let want = clamp(KEY / exp(sums[0].x / sums[0].y), 1.0, mix(1.0, MAX_LIFT, params.sky.w));
+        let day = params.sky.w;
+        let want = clamp(KEY / exp(sums[0].x / sums[0].y), mix(1.0, MIN_LIFT, day), mix(1.0, MAX_LIFT, day));
         // Seconds to adapt: slower into the shade than back into the sun, as eyes do.
-        let tau = select(0.4, 1.5, want > meter[0]);
+        let tau = select(0.5, 2.0, want > meter[0]);
         meter[0] = select(want, mix(meter[0], want, 1.0 - exp(-params.fade.w / tau)), meter[0] > 0.0);
     }
 }
@@ -122,7 +124,7 @@ fn cs_meter(@builtin(local_invocation_index) i: u32, @builtin(local_invocation_i
     let ndc = vec2((frag.x / f32(size.x)) * 2.0 - 1.0, 1.0 - (frag.y / f32(size.y)) * 2.0);
     let p4 = params.inverse_view_proj * vec4(ndc, 1.0, 1.0);
     let dir = normalize(p4.xyz / p4.w);
-    var col = max(fogged(sum / weight * textureLoad(albedo, px, 0).rgb * EXPOSURE * max(adapted[0], 1.0), a.x, dir), vec3(0.0));
+    var col = max(fogged(sum / weight * textureLoad(albedo, px, 0).rgb * EXPOSURE * select(1.0, adapted[0], adapted[0] > 0.0), a.x, dir), vec3(0.0));
     if SHOULDER > 0.5 {
         // Soft shoulder on the brightest channel, the hue kept: per channel it would grey
         // bright colours (sunlit sand, grass). Linear up to the knee, then easing into 1.
