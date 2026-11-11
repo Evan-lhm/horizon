@@ -324,6 +324,40 @@ fn random_unit_vector() -> vec3<f32> {
     return vec3(r * cos(phi), r * sin(phi), z);
 }
 
+// The light cache's cells (plan B4, step 1; the scheme is Bevy Solari's world cache, MIT/Apache:
+// a hash of the rounded position and the rounded normal). Not read yet: the table and its
+// update pass come next.
+const CACHE_CELL: f32 = 1.0;
+const CACHE_SLOTS: u32 = 1048576u;
+
+// The size of the cell at `dist` blocks from the camera: one block near, doubling with the
+// distance so the far cells cover about as many pixels as the near ones.
+fn cache_cell_size(dist: f32) -> f32 {
+    return CACHE_CELL * exp2(floor(log2(max(dist / 32.0, 1.0))));
+}
+
+fn cache_mix(h: u32, v: u32) -> u32 {
+    var x = (h ^ v) * 747796405u + 2891336453u;
+    x = ((x >> ((x >> 28u) + 4u)) ^ x) * 277803737u;
+    return x ^ (x >> 22u);
+}
+
+// The slot of world point `p` facing `n`, seen from `dist` blocks: its cell at that size, and
+// the face of the block the normal is nearest to.
+fn cache_slot(p: vec3<f32>, n: vec3<f32>, dist: f32) -> u32 {
+    let size = cache_cell_size(dist);
+    let c = vec3<i32>(floor(p / size));
+    let a = abs(n);
+    var face = select(0u, 1u, n.x < 0.0);
+    if a.y >= a.x && a.y >= a.z { face = select(2u, 3u, n.y < 0.0); }
+    if a.z > a.x && a.z > a.y { face = select(4u, 5u, n.z < 0.0); }
+    var h = cache_mix(u32(size), face);
+    h = cache_mix(h, bitcast<u32>(c.x));
+    h = cache_mix(h, bitcast<u32>(c.y));
+    h = cache_mix(h, bitcast<u32>(c.z));
+    return h % CACHE_SLOTS;
+}
+
 // How much of the traced light point `p` (from the camera) keeps near the edge of the traced
 // area: looked at from above (flying) the band is seen face on, so it starts sooner, up to
 // halfway in, and the limit doesn't read as a ring on the ground.
