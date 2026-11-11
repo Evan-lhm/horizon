@@ -324,6 +324,14 @@ fn random_unit_vector() -> vec3<f32> {
     return vec3(r * cos(phi), r * sin(phi), z);
 }
 
+// How much of the traced light point `p` (from the camera) keeps near the edge of the traced
+// area: looked at from above (flying) the band is seen face on, so it starts sooner, up to
+// halfway in, and the limit doesn't read as a ring on the ground.
+fn edge_fade(p: vec3<f32>) -> f32 {
+    let steep = abs(p.y) / max(length(p), 0.001);
+    return 1.0 - smoothstep(params.fade.x * (1.0 - 0.5 * steep), params.fade.y, length(p.xz));
+}
+
 // The sun or moon reaching point `p` of normal `n`, through a soft shadow.
 fn direct(p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
     let l = cone_dir(params.light_dir.xyz, 0.02);
@@ -391,7 +399,7 @@ struct Out {
     let p4 = params.inverse_view_proj * vec4(ndc, d, 1.0);
     let p = p4.xyz / p4.w;
     let dist = length(p);
-    let fade = 1.0 - smoothstep(params.fade.x, params.fade.y, length(p.xz));
+    let fade = edge_fade(p);
     if fade <= 0.0 { return none; }
     seed = (u32(px.x) * 1973u + u32(px.y) * 9277u + u32(params.camera.w) * 26699u) | 1u;
     let cam = params.camera.xyz;
@@ -504,7 +512,7 @@ fn seen(s: Surf) -> vec3<f32> {
         return vec4(0.0);
     }
     // Past the traced area the water still mirrors the sky.
-    let fade = 1.0 - smoothstep(params.fade.x, params.fade.y, length(p.xz));
+    let fade = edge_fade(p);
     seed = (u32(px.x) * 1973u + u32(px.y) * 9277u + u32(params.camera.w) * 26699u) | 1u;
     let v = normalize(p);
     let w = p.xz + params.camera.xz;

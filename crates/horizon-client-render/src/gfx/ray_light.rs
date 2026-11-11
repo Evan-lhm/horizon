@@ -932,12 +932,12 @@ fn encodes(format: wgpu::TextureFormat) -> bool {
     !format.is_srgb()
 }
 
-/// Where the lighting fades out, horizontally from the camera (over the last four chunks, ending where the
+/// Where the lighting fades out, horizontally from the camera (over the last four chunks, or the last two fifths of a longer reach, ending where the
 /// TLAS surely spans whatever the camera's place in its own column), how far rays go, and the
 /// seconds since last frame (`dt`).
 fn fade(reach: i32, dt: f32) -> [f32; 4] {
     let end = (reach.max(1) * 16) as f32;
-    [(end - 64.0).max(0.0), end, RAY_LENGTH, dt]
+    [(end - (end * 0.4).max(64.0)).max(0.0), end, RAY_LENGTH, dt]
 }
 
 /// Towards the sun, in world space, at vanilla's sun angle: it rises in the east (+x) at 270
