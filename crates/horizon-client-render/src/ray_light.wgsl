@@ -269,8 +269,12 @@ fn surface(h: RayIntersection, origin: vec3<f32>, dir: vec3<f32>) -> Surf {
     let tint = min(color.rgb / face_shade(n), vec3(1.0));
     var m = 255u << 8u;
     if layer < arrayLength(&materials) { m = materials[layer]; }
+    // Only the bright texels of a glowing sprite glow (a torch's flame, not its stick): the
+    // luminance cubed, with a floor (plan B5, step 4).
+    let lum = dot(linear(tex).rgb, vec3(0.2126, 0.7152, 0.0722));
+    let mask = max(lum * lum * lum, 0.1);
     return Surf(origin + dir * h.t, n, linear(tex) * linear(tint), sky, block,
-        f32(m & 0xffu) / 255.0 * 6.0, f32((m >> 8u) & 0xffu) / 255.0, f32((m >> 16u) & 1u),
+        f32(m & 0xffu) / 255.0 * 6.0 * mask, f32((m >> 8u) & 0xffu) / 255.0, f32((m >> 16u) & 1u),
         select(n, vec3(0.0, 1.0, 0.0), (m & 0x20000u) != 0u));
 }
 
