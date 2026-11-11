@@ -60,6 +60,9 @@ pub(in crate::gfx) struct RayLight {
     materials: wgpu::Buffer,
     trace: Option<(u32, wgpu::RenderPipeline)>,
     composite: Option<(wgpu::TextureFormat, wgpu::RenderPipeline)>,
+    /// The eye's adaptation (`cs_meter` in ray_light_blend.wgsl), and the one f32 it keeps.
+    meter: Option<wgpu::ComputePipeline>,
+    exposure: wgpu::Buffer,
     /// Water's reflections and the light shafts, for the world's format and the sprites' split.
     reflect: Option<((wgpu::TextureFormat, u32), [wgpu::RenderPipeline; 2])>,
     /// The bloom's bright pass, two blurs and composite, for the world's format.
@@ -194,6 +197,13 @@ impl RayLight {
             materials: material_buffer(device, &[super::ray_material::DEFAULT]),
             trace: None,
             composite: None,
+            meter: None,
+            exposure: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Ray-traced light, exposure"),
+                size: 4,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            }),
             reflect: None,
             bloom: None,
             bloom_layout,
@@ -317,8 +327,11 @@ impl RayLight {
         if self.composite.as_ref().is_none_or(|(f, _)| *f != format) {
             self.composite = Some((format, composite_pipeline(device, format)));
         }
-        let (Some(t), Some((_, trace)), Some((_, composite))) =
-            (&self.targets, &self.trace, &self.composite)
+        if self.meter.is_none() {
+            self.meter = Some(meter_pipeline(device));
+        }
+        let (Some(t), Some((_, trace)), Some((_, composite)), Some(meter)) =
+            (&self.targets, &self.trace, &self.composite, &self.meter)
         else {
             return;
         };
@@ -355,6 +368,33 @@ impl RayLight {
             pass.set_bind_group(0, &group, &[]);
             pass.draw(0..3, 0..1);
         }
+        {
+            let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Ray-traced light, exposure"),
+                layout: &meter.get_bind_group_layout(0),
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&t.color[cur]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: self.params.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: self.exposure.as_entire_binding(),
+                    },
+                ],
+            });
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Ray-traced light, exposure"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(meter);
+            pass.set_bind_group(0, &group, &[]);
+            pass.dispatch_workgroups(1, 1, 1);
+        }
         let blend_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Ray-traced light, blend"),
             layout: &composite.get_bind_group_layout(0),
@@ -374,6 +414,10 @@ impl RayLight {
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: wgpu::BindingResource::TextureView(&t.albedo),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: self.exposure.as_entire_binding(),
                 },
             ],
         });
@@ -775,6 +819,21 @@ fn composite_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> wgp
         depth_stencil: None,
         multisample: Default::default(),
         multiview_mask: None,
+        cache: None,
+    })
+}
+
+fn meter_pipeline(device: &wgpu::Device) -> wgpu::ComputePipeline {
+    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Ray-traced light, exposure"),
+        source: wgpu::ShaderSource::Wgsl(include_str!("../ray_light_blend.wgsl").into()),
+    });
+    device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("Ray-traced light, exposure"),
+        layout: None,
+        module: &module,
+        entry_point: Some("cs_meter"),
+        compilation_options: Default::default(),
         cache: None,
     })
 }

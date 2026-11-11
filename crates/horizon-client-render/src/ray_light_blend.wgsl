@@ -52,6 +52,40 @@ override SHOULDER: f32 = 0.0;
 // Linear light times this: 1.0 is paper white (docs/hdr-passes.md), no tone curve.
 const EXPOSURE: f32 = 0.3;
 
+// The eye's adaptation, which `cs_meter` keeps: EXPOSURE times it (0 before the first frame).
+@group(0) @binding(4) var<storage, read> adapted: array<f32>;
+@group(0) @binding(5) var<storage, read_write> meter: array<f32>;
+// A scene whose traced light averages under KEY (in the shade of trees, indoors) is lifted
+// towards it, by day only and at most MAX_LIFT: open daylight and the night stay as they are.
+const KEY: f32 = 1.6;
+const MAX_LIFT: f32 = 2.5;
+var<workgroup> sums: array<vec2<f32>, 256>;
+
+// One workgroup: the log-average of 64x64 traced pixels, eased into `meter` frame by frame.
+@compute @workgroup_size(16, 16)
+fn cs_meter(@builtin(local_invocation_index) i: u32, @builtin(local_invocation_id) id: vec3<u32>) {
+    let size = vec2<u32>(textureDimensions(light));
+    var s = vec2(0.0);
+    for (var y = 0u; y < 4u; y++) {
+        for (var x = 0u; x < 4u; x++) {
+            let px = (id.xy * 4u + vec2(x, y)) * size / 64u + size / 128u;
+            let c = textureLoad(light, px, 0);
+            if c.a > 0.0 {
+                s += vec2(log(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)) + 0.001), 1.0);
+            }
+        }
+    }
+    sums[i] = s;
+    for (var n = 128u; n > 0u; n >>= 1u) {
+        workgroupBarrier();
+        if i < n { sums[i] += sums[i + n]; }
+    }
+    if i == 0u && sums[0].y >= 64.0 {
+        let want = clamp(KEY / exp(sums[0].x / sums[0].y), 1.0, mix(1.0, MAX_LIFT, params.sky.w));
+        meter[0] = select(want, mix(meter[0], want, 0.03), meter[0] > 0.0);
+    }
+}
+
 @vertex fn vs_main(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
     let uv = vec2(f32((i << 1u) & 2u), f32(i & 2u));
     return vec4(uv * 2.0 - 1.0, 0.0, 1.0);
@@ -84,7 +118,7 @@ const EXPOSURE: f32 = 0.3;
     let ndc = vec2((frag.x / f32(size.x)) * 2.0 - 1.0, 1.0 - (frag.y / f32(size.y)) * 2.0);
     let p4 = params.inverse_view_proj * vec4(ndc, 1.0, 1.0);
     let dir = normalize(p4.xyz / p4.w);
-    var col = max(fogged(sum / weight * textureLoad(albedo, px, 0).rgb * EXPOSURE, a.x, dir), vec3(0.0));
+    var col = max(fogged(sum / weight * textureLoad(albedo, px, 0).rgb * EXPOSURE * max(adapted[0], 1.0), a.x, dir), vec3(0.0));
     if SHOULDER > 0.5 {
         // Soft shoulder on the brightest channel, the hue kept: per channel it would grey
         // bright colours (sunlit sand, grass). Linear up to the knee, then easing into 1.
